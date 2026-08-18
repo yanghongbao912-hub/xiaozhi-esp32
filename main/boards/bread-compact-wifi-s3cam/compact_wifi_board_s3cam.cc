@@ -84,6 +84,10 @@ private:
         // Reset the display
         ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_, true));
 
+        // Force maximum contrast (fix blank screen)
+        uint8_t contrast = 0xFF;
+        esp_lcd_panel_io_tx_param(panel_io_, 0x81, &contrast, 1);
+
         display_ = new OledDisplay(panel_io_, panel_, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
     }
 
