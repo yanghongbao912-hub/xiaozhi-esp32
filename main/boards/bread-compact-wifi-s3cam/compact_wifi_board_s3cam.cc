@@ -1,6 +1,7 @@
 #include "wifi_board.h"
 #include "codecs/no_audio_codec.h"
 #include "display/oled_display.h"
+#include "display/no_display.h"
 #include "system_reset.h"
 #include "application.h"
 #include "button.h"
@@ -82,9 +83,16 @@ private:
         ESP_LOGI(TAG, "SSD1306 driver installed");
 
         // Reset the display
+        ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_));
+        if (esp_lcd_panel_init(panel_) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to initialize display");
+            display_ = new NoDisplay();
+            return;
+        }
+        ESP_LOGI(TAG, "Turning display on");
         ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_, true));
 
-        // Force maximum contrast (fix blank screen)
+        // Force maximum contrast
         uint8_t contrast = 0xFF;
         esp_lcd_panel_io_tx_param(panel_io_, 0x81, &contrast, 1);
 
