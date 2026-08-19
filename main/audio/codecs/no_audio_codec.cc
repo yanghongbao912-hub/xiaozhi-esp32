@@ -221,7 +221,9 @@ int NoAudioCodec::Write(const int16_t* data, int samples) {
 
     // output_volume_: 0-100
     // volume_factor_: 0-65536
-    int32_t volume_factor = pow(double(output_volume_) / 100.0, 2) * 65536;
+    // Boost gain 1.5x at max volume for louder output (minor clipping acceptable)
+    double gain = (output_volume_ >= 100) ? 1.5 : pow(double(output_volume_) / 100.0, 2);
+    int32_t volume_factor = gain * 65536;
     for (int i = 0; i < samples; i++) {
         int64_t temp = int64_t(data[i]) * volume_factor; // 使用 int64_t 进行乘法运算
         if (temp > INT32_MAX) {
