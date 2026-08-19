@@ -1,7 +1,7 @@
 #include "wifi_board.h"
 #include "codecs/no_audio_codec.h"
 #include "display/oled_display.h"
-#include "display/no_display.h"
+#include "display/display.h"
 #include "system_reset.h"
 #include "application.h"
 #include "button.h"
