@@ -1,0 +1,9 @@
+{
+    "type": "bread-compact-wifi-s3cam-dualeye",
+    "target": "esp32s3",
+    "builds": [
+        {
+            "name": "bread-compact-wifi-s3cam-dualeye"
+        }
+    ]
+}
