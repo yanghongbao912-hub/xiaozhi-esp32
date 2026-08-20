@@ -28,7 +28,7 @@
 #endif
 
 
-// GPIO48 is used as LCD backlight, so the onboard LED is disabled (NoLed)
+// GPIO48 is used as LCD SCLK, so the onboard LED is disabled (NoLed)
 #define BUILTIN_LED_GPIO        GPIO_NUM_NC
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 #define TOUCH_BUTTON_GPIO       GPIO_NUM_NC
@@ -36,10 +36,11 @@
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
 // 0.71" DualEye (GC9D01 160x160 x2, shared SPI bus, both eyes show same content)
-// 转接板端子: GPIO45=CS, GPIO48=背光(Q1高电平点亮), GPIO47=DC, GPIO21=RST, GPIO13=MOSI, GPIO14=SCLK
-#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_48
+// 已实测转接板 Q1 电路: R2(限流)->Q1基极<-GPIO14端子, R4(下拉) => 背光=GPIO14, 高电平点亮
+// 转接板端子: GPIO45=CS(F7), GPIO48=SCLK(F8), GPIO47=DC(F9), GPIO21=RST(F10), GPIO13=MOSI(F11)
+#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_14
 #define DISPLAY_MOSI_PIN      GPIO_NUM_13
-#define DISPLAY_CLK_PIN       GPIO_NUM_14
+#define DISPLAY_CLK_PIN       GPIO_NUM_48
 #define DISPLAY_DC_PIN        GPIO_NUM_47
 #define DISPLAY_RST_PIN       GPIO_NUM_21
 #define DISPLAY_CS_PIN        GPIO_NUM_45
