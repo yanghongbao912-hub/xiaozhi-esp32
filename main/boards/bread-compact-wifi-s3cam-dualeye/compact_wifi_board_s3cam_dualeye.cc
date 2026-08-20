@@ -13,62 +13,7 @@
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_vendor.h>
-#include <esp_lcd_gc9a01.h>
-
-// GC9D01 init sequence (official Waveshare 0.71inch DualEye TFT_eSPI driver)
-static const gc9a01_lcd_init_cmd_t gc9d01_lcd_init_cmds[] = {
-    //  {cmd, { data }, data_size, delay_ms}
-    {0xFE, (uint8_t[]){}, 0, 0},
-    {0xEF, (uint8_t[]){}, 0, 0},
-    {0x80, (uint8_t[]){0xFF}, 1, 0},
-    {0x81, (uint8_t[]){0xFF}, 1, 0},
-    {0x82, (uint8_t[]){0xFF}, 1, 0},
-    {0x83, (uint8_t[]){0xFF}, 1, 0},
-    {0x84, (uint8_t[]){0xFF}, 1, 0},
-    {0x85, (uint8_t[]){0xFF}, 1, 0},
-    {0x86, (uint8_t[]){0xFF}, 1, 0},
-    {0x87, (uint8_t[]){0xFF}, 1, 0},
-    {0x88, (uint8_t[]){0xFF}, 1, 0},
-    {0x89, (uint8_t[]){0xFF}, 1, 0},
-    {0x8A, (uint8_t[]){0xFF}, 1, 0},
-    {0x8B, (uint8_t[]){0xFF}, 1, 0},
-    {0x8C, (uint8_t[]){0xFF}, 1, 0},
-    {0x8D, (uint8_t[]){0xFF}, 1, 0},
-    {0x8E, (uint8_t[]){0xFF}, 1, 0},
-    {0x8F, (uint8_t[]){0xFF}, 1, 0},
-    {0x3A, (uint8_t[]){0x05}, 1, 0},
-    {0xEC, (uint8_t[]){0x01}, 1, 0},
-    {0x74, (uint8_t[]){0x02, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00}, 7, 0},
-    {0x98, (uint8_t[]){0x3E}, 1, 0},
-    {0x99, (uint8_t[]){0x3E}, 1, 0},
-    {0xB5, (uint8_t[]){0x0D, 0x0D}, 2, 0},
-    {0x60, (uint8_t[]){0x38, 0x0F, 0x79, 0x67}, 4, 0},
-    {0x61, (uint8_t[]){0x38, 0x11, 0x79, 0x67}, 4, 0},
-    {0x64, (uint8_t[]){0x38, 0x17, 0x71, 0x5F, 0x79, 0x67}, 6, 0},
-    {0x65, (uint8_t[]){0x38, 0x13, 0x71, 0x5B, 0x79, 0x67}, 6, 0},
-    {0x6A, (uint8_t[]){0x00, 0x00}, 2, 0},
-    {0x6C, (uint8_t[]){0x22, 0x02, 0x22, 0x02, 0x22, 0x22, 0x50}, 7, 0},
-    {0x6E, (uint8_t[]){0x03, 0x03, 0x01, 0x01, 0x00, 0x00, 0x0F, 0x0F, 0x0D, 0x0D, 0x0B, 0x0B, 0x09, 0x09, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x0A, 0x0C, 0x0C, 0x0E, 0x0E, 0x10, 0x10, 0x00, 0x00, 0x02, 0x02, 0x04, 0x04}, 32, 0},
-    {0xBF, (uint8_t[]){0x01}, 1, 0},
-    {0xF9, (uint8_t[]){0x40}, 1, 0},
-    {0x9B, (uint8_t[]){0x3B}, 1, 0},
-    {0x93, (uint8_t[]){0x33, 0x7F, 0x00}, 3, 0},
-    {0x7E, (uint8_t[]){0x30}, 1, 0},
-    {0x70, (uint8_t[]){0x0D, 0x02, 0x08, 0x0D, 0x02, 0x08}, 6, 0},
-    {0x71, (uint8_t[]){0x0D, 0x02, 0x08}, 3, 0},
-    {0x91, (uint8_t[]){0x0E, 0x09}, 2, 0},
-    {0xC3, (uint8_t[]){0x19}, 1, 0},
-    {0xC4, (uint8_t[]){0x19}, 1, 0},
-    {0xC9, (uint8_t[]){0x3C}, 1, 0},
-    {0xF0, (uint8_t[]){0x53, 0x15, 0x0A, 0x04, 0x00, 0x3E}, 6, 0},
-    {0xF2, (uint8_t[]){0x53, 0x15, 0x0A, 0x04, 0x00, 0x3A}, 6, 0},
-    {0xF1, (uint8_t[]){0x56, 0xA8, 0x7F, 0x33, 0x34, 0x5F}, 6, 0},
-    {0xF3, (uint8_t[]){0x52, 0xA4, 0x7F, 0x33, 0x34, 0xDF}, 6, 0},
-    {0x36, (uint8_t[]){0x00}, 1, 0},
-    {0x11, (uint8_t[]){}, 0, 200},
-    {0x29, (uint8_t[]){}, 0, 0},
-    {0x2C, (uint8_t[]){}, 0, 0},
-};
+#include "esp_lcd_gc9d01.h"
 
 #define TAG "CompactWifiBoardS3CamDualEye"
 
@@ -92,7 +37,7 @@ private:
         esp_lcd_panel_io_handle_t panel_io = nullptr;
         esp_lcd_panel_handle_t panel = nullptr;
 
-        ESP_LOGD(TAG, "Install panel IO");
+        ESP_LOGI(TAG, "Install panel IO");
         esp_lcd_panel_io_spi_config_t io_config = {};
         io_config.cs_gpio_num = DISPLAY_CS_PIN;
         io_config.dc_gpio_num = DISPLAY_DC_PIN;
@@ -103,19 +48,15 @@ private:
         io_config.lcd_param_bits = 8;
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI3_HOST, &io_config, &panel_io));
 
-        ESP_LOGD(TAG, "Install GC9D01 driver");
+        // Strict GC9D01 driver: the panel driver sends ONLY the GC9D01 init
+        // sequence (built-in, identical to TFT_eSPI GC9D01_Init.h). No generic
+        // GC9A01 commands are injected, so 0x3A stays 0x05 (GC9D01 RGB565).
+        ESP_LOGI(TAG, "Install GC9D01 driver");
         esp_lcd_panel_dev_config_t panel_config = {};
         panel_config.reset_gpio_num = DISPLAY_RST_PIN;
         panel_config.rgb_ele_order = DISPLAY_RGB_ORDER;
         panel_config.bits_per_pixel = 16;
-        // 必须在创建 panel 之前把 vendor_config(GC9D01 初始化序列) 挂上,
-        // 否则 GC9D01 会被当作默认 GC9A01 初始化, 屏幕无法点亮
-        gc9a01_vendor_config_t gc9d01_vendor_config = {
-            .init_cmds = gc9d01_lcd_init_cmds,
-            .init_cmds_size = sizeof(gc9d01_lcd_init_cmds) / sizeof(gc9a01_lcd_init_cmd_t),
-        };
-        panel_config.vendor_config = &gc9d01_vendor_config;
-        ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel));
+        ESP_ERROR_CHECK(esp_lcd_new_panel_gc9d01(panel_io, &panel_config, &panel));
 
         esp_lcd_panel_reset(panel);
         esp_lcd_panel_init(panel);
