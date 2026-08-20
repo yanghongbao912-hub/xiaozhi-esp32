@@ -27,37 +27,38 @@
 
 #endif
 
-
-// GPIO48 is used as LCD SCLK, so the onboard LED is disabled (NoLed)
+// GPIO48 是屏幕背光控制脚, 与板载 RGB 灯珠冲突 => 弃用状态灯
 #define BUILTIN_LED_GPIO        GPIO_NUM_NC
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 #define TOUCH_BUTTON_GPIO       GPIO_NUM_NC
 #define VOLUME_UP_BUTTON_GPIO   GPIO_NUM_NC
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
-// 0.71" DualEye (GC9D01 160x160 x2, shared SPI bus, both eyes show same content)
-// 转接板端子: GPIO45=CS(F7), "GPIO48"端子=SCLK(F8)+背光(Q1基极), GPIO47=DC(F9), GPIO21=RST(F10), GPIO13=MOSI(F11)
-// SCLK 用 GPIO38: GPIO48 是板载 RGB 灯珠, 会拖累时钟信号; 模式3(空闲高电平) => Q1 导通背光亮
-#define DUALEYE_TEST_EYE  // 测试模式: 屏直接播放灵动眼睛动画 (验证渲染+背光)
+// ================================================================
+//  0.71寸 GC9D01 圆屏 (0.71-12H 转接板), 引脚按转接板实测写死:
+//    SCK=13  MOSI=14  CS=45  DC=47  RST=21  背光=48(高电平点亮, NPN低边开关)
+// ================================================================
+#define DUALEYE_TEST_EYE  // 测试模式: 屏播放灵动眼睛动画 + 开机颜色闪烁(验证渲染)
 
-#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_NC
-#define DISPLAY_MOSI_PIN      GPIO_NUM_13
-#define DISPLAY_CLK_PIN       GPIO_NUM_38
+#define DISPLAY_WIDTH   160
+#define DISPLAY_HEIGHT  160
+
+#define DISPLAY_MOSI_PIN      GPIO_NUM_14
+#define DISPLAY_CLK_PIN       GPIO_NUM_13
 #define DISPLAY_DC_PIN        GPIO_NUM_47
 #define DISPLAY_RST_PIN       GPIO_NUM_21
 #define DISPLAY_CS_PIN        GPIO_NUM_45
 
-#define DISPLAY_WIDTH   160
-#define DISPLAY_HEIGHT  160
-#define DISPLAY_MIRROR_X false
-#define DISPLAY_MIRROR_Y false
-#define DISPLAY_SWAP_XY false
-#define DISPLAY_INVERT_COLOR    false
+#define DISPLAY_BACKLIGHT_PIN           GPIO_NUM_48
+#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false   // 实测: Q1 低边开关, 高电平点亮
+
+#define DISPLAY_MIRROR_X      false
+#define DISPLAY_MIRROR_Y      false
+#define DISPLAY_SWAP_XY       false
+#define DISPLAY_OFFSET_X      0
+#define DISPLAY_OFFSET_Y      0
+#define DISPLAY_SPI_MODE      0
+#define DISPLAY_INVERT_COLOR  true   // IPS 屏需要反色才能正常显示黑色
 #define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_RGB
-#define DISPLAY_OFFSET_X  0
-#define DISPLAY_OFFSET_Y  0
-#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
-#define DISPLAY_SPI_MODE 3
-#define DISPLAY_SPI_CLK_HZ (4 * 1000 * 1000)  // 4MHz, 避免被 Q1 基极电阻拖累时钟波形
 
 #endif // _BOARD_CONFIG_H_
