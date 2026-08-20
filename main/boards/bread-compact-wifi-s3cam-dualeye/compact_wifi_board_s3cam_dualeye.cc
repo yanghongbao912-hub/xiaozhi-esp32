@@ -6,7 +6,6 @@
 #include "button.h"
 #include "config.h"
 #include "mcp_server.h"
-#include "led/single_led.h"
 
 #include <esp_log.h>
 #include <driver/spi_common.h>
@@ -85,11 +84,17 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializeButtons();
+        if (DISPLAY_BACKLIGHT_PIN != GPIO_NUM_NC) {
+            GetBacklight()->RestoreBrightness();
+        }
     }
 
-    virtual Led* GetLed() override {
-        static SingleLed led(BUILTIN_LED_GPIO);
-        return &led;
+    virtual Backlight* GetBacklight() override {
+        if (DISPLAY_BACKLIGHT_PIN != GPIO_NUM_NC) {
+            static PwmBacklight backlight(DISPLAY_BACKLIGHT_PIN, DISPLAY_BACKLIGHT_OUTPUT_INVERT);
+            return &backlight;
+        }
+        return nullptr;
     }
 
     virtual AudioCodec* GetAudioCodec() override {
