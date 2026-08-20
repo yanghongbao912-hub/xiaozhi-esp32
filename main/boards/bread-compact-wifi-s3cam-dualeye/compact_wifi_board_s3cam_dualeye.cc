@@ -14,12 +14,16 @@
 #include <esp_lcd_panel_vendor.h>
 #include "esp_lcd_gc9d01.h"
 
+#ifdef DUALEYE_TEST_EYE
+#include "eye_test.h"
+#endif
+
 #define TAG "CompactWifiBoardS3CamDualEye"
 
 class CompactWifiBoardS3CamDualEye : public WifiBoard {
 private:
     Button boot_button_;
-    LcdDisplay* display_;
+    Display* display_;
 
     void InitializeSpi() {
         spi_bus_config_t buscfg = {};
@@ -63,8 +67,15 @@ private:
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
 
+#ifdef DUALEYE_TEST_EYE
+        // Test mode: play a lively eye animation directly on the panel,
+        // skip the LVGL UI so nothing overwrites the animation.
+        display_ = new NoDisplay();
+        eye_test_start(panel);
+#else
         display_ = new SpiLcdDisplay(panel_io, panel,
                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
+#endif
     }
 
     void InitializeButtons() {

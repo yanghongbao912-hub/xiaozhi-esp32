@@ -36,9 +36,11 @@
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
 // 0.71" DualEye (GC9D01 160x160 x2, shared SPI bus, both eyes show same content)
-// 已实测转接板 Q1 电路: R2(限流)->Q1基极<-GPIO14端子, R4(下拉) => 背光=GPIO14, 高电平点亮
-// 转接板端子: GPIO45=CS(F7), GPIO48=SCLK(F8), GPIO47=DC(F9), GPIO21=RST(F10), GPIO13=MOSI(F11)
-#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_14
+// 转接板端子: GPIO45=CS(F7), GPIO48=SCLK(F8)+背光(Q1基极), GPIO47=DC(F9), GPIO21=RST(F10), GPIO13=MOSI(F11)
+// 背光: Q1 基极接在 SCLK 节点("GPIO48"端子, R3 限流), SPI 模式3(空闲高电平) => 空闲时 Q1 导通背光亮
+#define DUALEYE_TEST_EYE  // 测试模式: 屏直接播放灵动眼睛动画 (验证渲染+背光)
+
+#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_NC
 #define DISPLAY_MOSI_PIN      GPIO_NUM_13
 #define DISPLAY_CLK_PIN       GPIO_NUM_48
 #define DISPLAY_DC_PIN        GPIO_NUM_47
@@ -54,7 +56,7 @@
 #define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_RGB
 #define DISPLAY_OFFSET_X  0
 #define DISPLAY_OFFSET_Y  0
-#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false  // 高电平点亮(Q1)
-#define DISPLAY_SPI_MODE 0
+#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
+#define DISPLAY_SPI_MODE 3
 
 #endif // _BOARD_CONFIG_H_
