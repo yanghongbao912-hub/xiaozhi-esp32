@@ -53,18 +53,20 @@ static void eye_test_task(void *arg) {
         vTaskDelete(NULL);
         return;
     }
-    // 1) Solid color flash: red -> green -> blue -> white (800ms each)
+    // 1) Solid color flash: red -> green -> blue -> white, loop 3 cycles
     //    Verifies SPI data reaches the panel and the byte order is correct.
     static const uint16_t flash_colors[] = {0xF800, 0x07E0, 0x001F, 0xFFFF};
     static const char *flash_names[] = {"RED", "GREEN", "BLUE", "WHITE"};
-    for (int i = 0; i < 4; i++) {
-        for (int p = 0; p < EYE_W * EYE_H; p++) {
-            buf[p * 2] = (uint8_t)(flash_colors[i] >> 8);
-            buf[p * 2 + 1] = (uint8_t)(flash_colors[i] & 0xFF);
+    for (int cycle = 0; cycle < 3; cycle++) {
+        for (int i = 0; i < 4; i++) {
+            for (int p = 0; p < EYE_W * EYE_H; p++) {
+                buf[p * 2] = (uint8_t)(flash_colors[i] >> 8);
+                buf[p * 2 + 1] = (uint8_t)(flash_colors[i] & 0xFF);
+            }
+            ESP_LOGI(TAG, "color flash: %s", flash_names[i]);
+            esp_lcd_panel_draw_bitmap(panel, 0, 0, EYE_W, EYE_H, buf);
+            vTaskDelay(pdMS_TO_TICKS(1200));
         }
-        ESP_LOGI(TAG, "color flash: %s", flash_names[i]);
-        esp_lcd_panel_draw_bitmap(panel, 0, 0, EYE_W, EYE_H, buf);
-        vTaskDelay(pdMS_TO_TICKS(800));
     }
     // 2) Lively eye animation
     uint32_t frame = 0;
