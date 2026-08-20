@@ -7,16 +7,11 @@ extern "C" {
 #endif
 
 /**
- * @brief Start a permutation test: tries 6 combinations of RST/DC/CS,
- *        each drawing a distinct solid color for 5 seconds, looping.
- *        Whichever combo shows a clean full-screen color is the correct
- *        mapping. Combos:
- *          1 RED    RST=45 DC=48 CS=47
- *          2 GREEN  RST=45 DC=47 CS=48
- *          3 BLUE   RST=48 DC=45 CS=47
- *          4 WHITE  RST=48 DC=47 CS=45
- *          5 YELLOW RST=47 DC=45 CS=48
- *          6 CYAN   RST=47 DC=48 CS=45
+ * @brief Exhaustive permutation test: MOSI=13 fixed, SCK/RST/DC/CS take all
+ *        24 permutations of {21,45,47,48}. Each combo draws a unique hue for
+ *        3 seconds (HSV wheel), looping forever. The first combo that shows a
+ *        clean full-screen color is the correct mapping; report the hue and it
+ *        maps to combo #N in the boot log.
  */
 void eye_test_permutation_start(void);
 
