@@ -36,13 +36,13 @@
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
 // 0.71" DualEye (GC9D01 160x160 x2, shared SPI bus, both eyes show same content)
-// 转接板端子: GPIO45=CS(F7), GPIO48=SCLK(F8)+背光(Q1基极), GPIO47=DC(F9), GPIO21=RST(F10), GPIO13=MOSI(F11)
-// 背光: Q1 基极接在 SCLK 节点("GPIO48"端子, R3 限流), SPI 模式3(空闲高电平) => 空闲时 Q1 导通背光亮
+// 转接板端子: GPIO45=CS(F7), "GPIO48"端子=SCLK(F8)+背光(Q1基极), GPIO47=DC(F9), GPIO21=RST(F10), GPIO13=MOSI(F11)
+// SCLK 用 GPIO38: GPIO48 是板载 RGB 灯珠, 会拖累时钟信号; 模式3(空闲高电平) => Q1 导通背光亮
 #define DUALEYE_TEST_EYE  // 测试模式: 屏直接播放灵动眼睛动画 (验证渲染+背光)
 
 #define DISPLAY_BACKLIGHT_PIN GPIO_NUM_NC
 #define DISPLAY_MOSI_PIN      GPIO_NUM_13
-#define DISPLAY_CLK_PIN       GPIO_NUM_48
+#define DISPLAY_CLK_PIN       GPIO_NUM_38
 #define DISPLAY_DC_PIN        GPIO_NUM_47
 #define DISPLAY_RST_PIN       GPIO_NUM_21
 #define DISPLAY_CS_PIN        GPIO_NUM_45
@@ -57,8 +57,7 @@
 #define DISPLAY_OFFSET_X  0
 #define DISPLAY_OFFSET_Y  0
 #define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
-// 模式0: 空闲低电平, 屏复位/初始化才正常(模式3的空闲高电平会导致复位失败)
-#define DISPLAY_SPI_MODE 0
+#define DISPLAY_SPI_MODE 3
 #define DISPLAY_SPI_CLK_HZ (4 * 1000 * 1000)  // 4MHz, 避免被 Q1 基极电阻拖累时钟波形
 
 #endif // _BOARD_CONFIG_H_
