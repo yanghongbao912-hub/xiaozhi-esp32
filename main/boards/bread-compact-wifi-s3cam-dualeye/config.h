@@ -28,7 +28,7 @@
 #endif
 
 
-// GPIO48 is used as LCD SCLK, so the onboard LED is disabled (NoLed)
+// GPIO48 is used as LCD backlight, so the onboard LED is disabled (NoLed)
 #define BUILTIN_LED_GPIO        GPIO_NUM_NC
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 #define TOUCH_BUTTON_GPIO       GPIO_NUM_NC
@@ -36,11 +36,10 @@
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
 // 0.71" DualEye (GC9D01 160x160 x2, shared SPI bus, both eyes show same content)
-// 转接板端子(与 ESP32 GPIO 同号连接): GPIO45=CS, GPIO48=SCLK, GPIO47=DC, GPIO21=RST, GPIO13=MOSI
-// 背光由转接板上的 Q1 三极管驱动, 高电平点亮, 控制脚是 GPIO14(即转接板的 Q1 基极端子)
-#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_14
+// 转接板端子: GPIO45=CS, GPIO48=背光(Q1高电平点亮), GPIO47=DC, GPIO21=RST, GPIO13=MOSI, GPIO14=SCLK
+#define DISPLAY_BACKLIGHT_PIN GPIO_NUM_48
 #define DISPLAY_MOSI_PIN      GPIO_NUM_13
-#define DISPLAY_CLK_PIN       GPIO_NUM_48
+#define DISPLAY_CLK_PIN       GPIO_NUM_14
 #define DISPLAY_DC_PIN        GPIO_NUM_47
 #define DISPLAY_RST_PIN       GPIO_NUM_21
 #define DISPLAY_CS_PIN        GPIO_NUM_45
