@@ -27,7 +27,7 @@
 
 #endif
 
-// GPIO48 是屏幕背光控制脚, 与板载 RGB 灯珠冲突 => 弃用状态灯
+// GPIO48 用作屏幕 DC 信号, 与板载 RGB 灯珠(也在48)冲突 => 弃用状态灯
 #define BUILTIN_LED_GPIO        GPIO_NUM_NC
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
 #define TOUCH_BUTTON_GPIO       GPIO_NUM_NC
@@ -35,22 +35,23 @@
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 
 // ================================================================
-//  0.71寸 GC9D01 圆屏 (0.71-12H 转接板), 引脚按转接板实测写死:
-//    SCK=13  MOSI=14  CS=45  DC=47  RST=21  背光=48(高电平点亮, NPN低边开关)
+//  0.71寸 GC9D01 圆屏 (0.71-12H 转接板), 万用表蜂鸣档逐脚实测:
+//    MOSI=13(脚11)  SCK=21(脚10)  RST=45(脚7)  DC=48(脚8)  CS=47(脚9)
+//    背光=14(经 Q1 低边开关驱动 FPC 2 脚 LEDK, 高电平点亮, 不反相)
 // ================================================================
 #define DUALEYE_TEST_EYE  // 测试模式: 屏播放灵动眼睛动画 + 开机颜色闪烁(验证渲染)
 
 #define DISPLAY_WIDTH   160
 #define DISPLAY_HEIGHT  160
 
-#define DISPLAY_MOSI_PIN      GPIO_NUM_14
-#define DISPLAY_CLK_PIN       GPIO_NUM_13
-#define DISPLAY_DC_PIN        GPIO_NUM_47
-#define DISPLAY_RST_PIN       GPIO_NUM_21
-#define DISPLAY_CS_PIN        GPIO_NUM_45
+#define DISPLAY_MOSI_PIN      GPIO_NUM_13   // FPC 11 脚
+#define DISPLAY_CLK_PIN       GPIO_NUM_21   // FPC 10 脚
+#define DISPLAY_DC_PIN        GPIO_NUM_48   // FPC 8 脚
+#define DISPLAY_RST_PIN       GPIO_NUM_45   // FPC 7 脚
+#define DISPLAY_CS_PIN        GPIO_NUM_47   // FPC 9 脚
 
-#define DISPLAY_BACKLIGHT_PIN           GPIO_NUM_48
-#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false   // 实测: Q1 低边开关, 高电平点亮
+#define DISPLAY_BACKLIGHT_PIN           GPIO_NUM_14   // 经 Q1 低边开关驱动 FPC 2 脚 LEDK
+#define DISPLAY_BACKLIGHT_OUTPUT_INVERT false         // 实测: 高电平点亮
 
 #define DISPLAY_MIRROR_X      false
 #define DISPLAY_MIRROR_Y      false
