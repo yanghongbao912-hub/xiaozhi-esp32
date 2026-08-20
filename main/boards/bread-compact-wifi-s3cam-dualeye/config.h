@@ -58,5 +58,6 @@
 #define DISPLAY_OFFSET_Y  0
 #define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
 #define DISPLAY_SPI_MODE 3
+#define DISPLAY_SPI_CLK_HZ (4 * 1000 * 1000)  // 4MHz, 避免被 Q1 基极电阻拖累时钟波形
 
 #endif // _BOARD_CONFIG_H_
