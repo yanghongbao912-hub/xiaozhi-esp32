@@ -37,6 +37,23 @@ private:
     }
 
     void InitializeLcdDisplay() {
+#ifdef DUALEYE_TEST_EYE
+        // Test mode: constant backlight via plain GPIO high (no PWM,
+        // avoids LEDC interacting with the onboard WS2812 on GPIO48).
+        if (DISPLAY_BACKLIGHT_PIN != GPIO_NUM_NC) {
+            gpio_config_t bl_cfg = {};
+            bl_cfg.pin_bit_mask = 1ULL << DISPLAY_BACKLIGHT_PIN;
+            bl_cfg.mode = GPIO_MODE_OUTPUT;
+            gpio_config(&bl_cfg);
+            gpio_set_level(DISPLAY_BACKLIGHT_PIN, 1);
+            ESP_LOGI(TAG, "Backlight: constant ON (GPIO %d)", DISPLAY_BACKLIGHT_PIN);
+        }
+        // RST/DC/CS permutation test: the test task creates its own panel
+        // for each combination and draws a distinct color.
+        display_ = new NoDisplay();
+        eye_test_permutation_start();
+        return;
+#endif
         esp_lcd_panel_io_handle_t panel_io = nullptr;
         esp_lcd_panel_handle_t panel = nullptr;
 
@@ -67,25 +84,8 @@ private:
         esp_lcd_panel_swap_xy(panel, DISPLAY_SWAP_XY);
         esp_lcd_panel_mirror(panel, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y);
 
-#ifdef DUALEYE_TEST_EYE
-        // Test mode: constant backlight via plain GPIO high (no PWM,
-        // avoids LEDC interacting with the onboard WS2812 on GPIO48).
-        if (DISPLAY_BACKLIGHT_PIN != GPIO_NUM_NC) {
-            gpio_config_t bl_cfg = {};
-            bl_cfg.pin_bit_mask = 1ULL << DISPLAY_BACKLIGHT_PIN;
-            bl_cfg.mode = GPIO_MODE_OUTPUT;
-            gpio_config(&bl_cfg);
-            gpio_set_level(DISPLAY_BACKLIGHT_PIN, 1);
-            ESP_LOGI(TAG, "Backlight: constant ON (GPIO %d)", DISPLAY_BACKLIGHT_PIN);
-        }
-        // Test mode: play a lively eye animation directly on the panel,
-        // skip the LVGL UI so nothing overwrites the animation.
-        display_ = new NoDisplay();
-        eye_test_start(panel);
-#else
         display_ = new SpiLcdDisplay(panel_io, panel,
                                      DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y, DISPLAY_MIRROR_X, DISPLAY_MIRROR_Y, DISPLAY_SWAP_XY);
-#endif
     }
 
     void InitializeButtons() {
