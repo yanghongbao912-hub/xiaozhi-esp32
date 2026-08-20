@@ -7,11 +7,13 @@ extern "C" {
 #endif
 
 /**
- * @brief Exhaustive permutation test: MOSI=13 fixed, SCK/RST/DC/CS take all
- *        24 permutations of {21,45,47,48}. Each combo draws a unique hue for
- *        3 seconds (HSV wheel), looping forever. The first combo that shows a
- *        clean full-screen color is the correct mapping; report the hue and it
- *        maps to combo #N in the boot log.
+ * @brief Dual-init test: 4 combos crossing two pin mappings (v3, seller)
+ *        with two init sequences (GC9A01 default, GC9D01), each a solid
+ *        color for 5 seconds, looping:
+ *          1 RED    v3 mapping (SCK21 RST45 DC48 CS47) + GC9A01 init
+ *          2 GREEN  v3 mapping + GC9D01 init
+ *          3 BLUE   seller mapping (SCK48 RST21 DC47 CS45) + GC9A01 init
+ *          4 WHITE  seller mapping + GC9D01 init
  */
 void eye_test_permutation_start(void);
 
