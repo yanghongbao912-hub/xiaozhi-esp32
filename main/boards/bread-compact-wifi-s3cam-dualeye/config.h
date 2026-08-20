@@ -57,7 +57,8 @@
 #define DISPLAY_OFFSET_X  0
 #define DISPLAY_OFFSET_Y  0
 #define DISPLAY_BACKLIGHT_OUTPUT_INVERT false
-#define DISPLAY_SPI_MODE 3
+// 模式0: 空闲低电平, 屏复位/初始化才正常(模式3的空闲高电平会导致复位失败)
+#define DISPLAY_SPI_MODE 0
 #define DISPLAY_SPI_CLK_HZ (4 * 1000 * 1000)  // 4MHz, 避免被 Q1 基极电阻拖累时钟波形
 
 #endif // _BOARD_CONFIG_H_
