@@ -107,7 +107,7 @@ esp_err_t esp_lcd_new_panel_gc9d01(const esp_lcd_panel_io_handle_t io, const esp
 
     switch (panel_dev_config->bits_per_pixel) {
     case 16:
-        gc9d01->colmod_val = 0x55;  // GC9D01 16bpp RGB565 (official espressif value)
+        gc9d01->colmod_val = 0x05;  // GC9D01 16bpp RGB565 (0x05, NOT 0x55)
         gc9d01->fb_bits_per_pixel = 16;
         break;
     case 18:
@@ -171,17 +171,17 @@ static esp_err_t panel_gc9d01_reset(esp_lcd_panel_t *panel)
     gc9d01_panel_t *gc9d01 = __containerof(panel, gc9d01_panel_t, base);
     esp_lcd_panel_io_handle_t io = gc9d01->io;
 
-    // perform hardware reset (official three-phase timing)
+    // GC9D01 strict reset: RST LOW >= 100ms, then HIGH >= 200ms before init
     if (gc9d01->reset_gpio_num >= 0) {
-        ESP_LOGI(TAG, "reset: RST GPIO%d idle HIGH 50ms", gc9d01->reset_gpio_num);
+        ESP_LOGI(TAG, "reset: RST GPIO%d idle HIGH 20ms", gc9d01->reset_gpio_num);
         gpio_set_level(gc9d01->reset_gpio_num, 1);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        ESP_LOGI(TAG, "reset: RST GPIO%d LOW 50ms (assert)", gc9d01->reset_gpio_num);
+        vTaskDelay(pdMS_TO_TICKS(20));
+        ESP_LOGI(TAG, "reset: RST GPIO%d LOW 120ms (assert >=100ms)", gc9d01->reset_gpio_num);
         gpio_set_level(gc9d01->reset_gpio_num, 0);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        ESP_LOGI(TAG, "reset: RST GPIO%d HIGH 120ms (release)", gc9d01->reset_gpio_num);
-        gpio_set_level(gc9d01->reset_gpio_num, 1);
         vTaskDelay(pdMS_TO_TICKS(120));
+        ESP_LOGI(TAG, "reset: RST GPIO%d HIGH 200ms (release >=200ms)", gc9d01->reset_gpio_num);
+        gpio_set_level(gc9d01->reset_gpio_num, 1);
+        vTaskDelay(pdMS_TO_TICKS(200));
     } else {
         ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, LCD_CMD_SWRESET, NULL, 0), TAG, "send command failed");
         vTaskDelay(pdMS_TO_TICKS(120));
@@ -238,7 +238,9 @@ static const gc9d01_lcd_init_cmd_t vendor_specific_init_default[] = {
     {0xF3, (uint8_t[]){0x52, 0xA4, 0x7F, 0x33, 0x34, 0xDF}, 6, 0},
     {0x11, NULL, 0, 200},
     {0x29, NULL, 0, 0},
-    {0x2C, NULL, 0, 0},
+    // NOTE: do NOT send 0x2C (RAMWR) here. Once RAMWR is sent, the panel
+    // stops accepting register commands and only accepts pixel data ->
+    // backlight on but permanently black screen.
 };
 
 static esp_err_t panel_gc9d01_init(esp_lcd_panel_t *panel)
@@ -277,7 +279,7 @@ static esp_err_t panel_gc9d01_init(esp_lcd_panel_t *panel)
         ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, init_cmds[i].cmd, init_cmds[i].data, init_cmds[i].data_bytes), TAG, "send command failed");
         vTaskDelay(pdMS_TO_TICKS(init_cmds[i].delay_ms));
     }
-    ESP_LOGI(TAG, "init: full sequence done (ends 0x29 DISPON + 0x2C RAMWR)");
+    ESP_LOGI(TAG, "init: full sequence done (ends 0x29 DISPON, no RAMWR)");
 
     return ESP_OK;
 }
