@@ -106,7 +106,9 @@ static void test_task(void *arg) {
     gpio_set_level(GPIO_NUM_13, 0);
     gpio_set_level(GPIO_NUM_48, 0);
 
-    // init SPI bus once (MOSI/SCK fixed)
+    // board constructor already initialized SPI3 with config.h pins (MOSI=13);
+    // free it first, then re-init with our clean-pin mapping.
+    spi_bus_free(SPI3_HOST);
     spi_bus_config_t buscfg = {};
     buscfg.mosi_io_num = mosi;
     buscfg.miso_io_num = -1;
