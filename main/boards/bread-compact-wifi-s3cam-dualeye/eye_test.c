@@ -76,8 +76,8 @@ static void test_task(void *arg) {
     }
     esp_lcd_panel_reset(panel);
     esp_lcd_panel_init(panel);
-    esp_lcd_panel_invert_color(panel, false);  // NO invert - see raw colors
-    ESP_LOGI(TAG, "panel ready, NO invert, pclk=2MHz, draw full 160x160 at (0,0)");
+    // NOTE: inversion already handled by vendor seq 0xEC 0x70, do NOT call invert_color here
+    ESP_LOGI(TAG, "panel ready, pclk=2MHz, draw full 160x160 at (0,0)");
 
     while (1) {
         draw_solid(panel, 0xF800, 0, 0, 160, 160);  // RED full screen

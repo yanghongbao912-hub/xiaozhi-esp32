@@ -107,7 +107,7 @@ esp_err_t esp_lcd_new_panel_gc9d01(const esp_lcd_panel_io_handle_t io, const esp
 
     switch (panel_dev_config->bits_per_pixel) {
     case 16:
-        gc9d01->colmod_val = 0x05;  // GC9D01 16bpp RGB565 (0x05, NOT 0x55)
+        gc9d01->colmod_val = 0x55;  // GC9D01 DualGate 160x160: 0x55 = 16bpp RGB565
         gc9d01->fb_bits_per_pixel = 16;
         break;
     case 18:
@@ -191,8 +191,9 @@ static esp_err_t panel_gc9d01_reset(esp_lcd_panel_t *panel)
 }
 
 static const gc9d01_lcd_init_cmd_t vendor_specific_init_default[] = {
-    {0xFE, NULL, 0, 0},
-    {0xEF, NULL, 0, 0},
+    // GC9D01 DualGate 160x160 init (authoritative, from GC9D01_LTSM lib)
+    {0xFE, NULL, 0, 0},                                  // Inter register enable 1
+    {0xEF, NULL, 0, 0},                                  // Inter register enable 2
     {0x80, (uint8_t[]){0xFF}, 1, 0},
     {0x81, (uint8_t[]){0xFF}, 1, 0},
     {0x82, (uint8_t[]){0xFF}, 1, 0},
@@ -209,11 +210,11 @@ static const gc9d01_lcd_init_cmd_t vendor_specific_init_default[] = {
     {0x8D, (uint8_t[]){0xFF}, 1, 0},
     {0x8E, (uint8_t[]){0xFF}, 1, 0},
     {0x8F, (uint8_t[]){0xFF}, 1, 0},
-    {0xEC, (uint8_t[]){0x01}, 1, 0},
+    {0xEC, (uint8_t[]){0x70}, 1, 0},                    // Inversion + 0x70
     {0x74, (uint8_t[]){0x02, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00}, 7, 0},
     {0x98, (uint8_t[]){0x3E}, 1, 0},
     {0x99, (uint8_t[]){0x3E}, 1, 0},
-    {0xB5, (uint8_t[]){0x0D, 0x0D}, 2, 0},
+    {0xB5, (uint8_t[]){0x0D, 0x0D, 0x00}, 3, 0},        // Blanking porch (3 bytes!)
     {0x60, (uint8_t[]){0x38, 0x0F, 0x79, 0x67}, 4, 0},
     {0x61, (uint8_t[]){0x38, 0x11, 0x79, 0x67}, 4, 0},
     {0x64, (uint8_t[]){0x38, 0x17, 0x71, 0x5F, 0x79, 0x67}, 6, 0},
@@ -221,7 +222,7 @@ static const gc9d01_lcd_init_cmd_t vendor_specific_init_default[] = {
     {0x6A, (uint8_t[]){0x00, 0x00}, 2, 0},
     {0x6C, (uint8_t[]){0x22, 0x02, 0x22, 0x02, 0x22, 0x22, 0x50}, 7, 0},
     {0x6E, (uint8_t[]){0x03, 0x03, 0x01, 0x01, 0x00, 0x00, 0x0F, 0x0F, 0x0D, 0x0D, 0x0B, 0x0B, 0x09, 0x09, 0x00, 0x00, 0x00, 0x00, 0x0A, 0x0A, 0x0C, 0x0C, 0x0E, 0x0E, 0x10, 0x10, 0x00, 0x00, 0x02, 0x02, 0x04, 0x04}, 32, 0},
-    {0xBF, (uint8_t[]){0x01}, 1, 0},
+    {0xBF, (uint8_t[]){0x01}, 1, 0},                    // Dual-Single gate select = dual
     {0xF9, (uint8_t[]){0x40}, 1, 0},
     {0x9B, (uint8_t[]){0x3B}, 1, 0},
     {0x93, (uint8_t[]){0x33, 0x7F, 0x00}, 3, 0},
@@ -229,18 +230,21 @@ static const gc9d01_lcd_init_cmd_t vendor_specific_init_default[] = {
     {0x70, (uint8_t[]){0x0D, 0x02, 0x08, 0x0D, 0x02, 0x08}, 6, 0},
     {0x71, (uint8_t[]){0x0D, 0x02, 0x08}, 3, 0},
     {0x91, (uint8_t[]){0x0E, 0x09}, 2, 0},
-    {0xC3, (uint8_t[]){0x19}, 1, 0},
-    {0xC4, (uint8_t[]){0x19}, 1, 0},
-    {0xC9, (uint8_t[]){0x3C}, 1, 0},
-    {0xF0, (uint8_t[]){0x53, 0x15, 0x0A, 0x04, 0x00, 0x3E}, 6, 0},
-    {0xF2, (uint8_t[]){0x53, 0x15, 0x0A, 0x04, 0x00, 0x3A}, 6, 0},
-    {0xF1, (uint8_t[]){0x56, 0xA8, 0x7F, 0x33, 0x34, 0x5F}, 6, 0},
-    {0xF3, (uint8_t[]){0x52, 0xA4, 0x7F, 0x33, 0x34, 0xDF}, 6, 0},
-    {0x11, NULL, 0, 200},
-    {0x29, NULL, 0, 0},
-    // NOTE: do NOT send 0x2C (RAMWR) here. Once RAMWR is sent, the panel
-    // stops accepting register commands and only accepts pixel data ->
-    // backlight on but permanently black screen.
+    {0xC3, (uint8_t[]){0x18}, 1, 0},                    // Vreg1a = 0x18
+    {0xC4, (uint8_t[]){0x18}, 1, 0},                    // Vreg1b = 0x18
+    {0xC9, (uint8_t[]){0x3C}, 1, 0},                    // Vreg2a = 0x3C
+    {0xF0, (uint8_t[]){0x13, 0x15, 0x04, 0x05, 0x01, 0x38}, 6, 0},  // Gamma1
+    {0xF2, (uint8_t[]){0x13, 0x15, 0x04, 0x05, 0x01, 0x34}, 6, 0},  // Gamma3
+    {0xF1, (uint8_t[]){0x4B, 0xB8, 0x7B, 0x34, 0x35, 0xEF}, 6, 0},  // Gamma2
+    {0xF3, (uint8_t[]){0x47, 0xB4, 0x72, 0x34, 0x35, 0xDA}, 6, 0},  // Gamma4
+    {0x3A, (uint8_t[]){0x55}, 1, 0},                    // COLMOD = 0x55 (16bpp RGB565)
+    {0xB6, (uint8_t[]){0x00, 0x00}, 2, 0},              // Display Function Control
+    {0xF6, (uint8_t[]){0xC0}, 1, 0},                    // Interface control
+    {0xB1, (uint8_t[]){0x00}, 1, 0},                    // SPI 2DATA control
+    {0x36, (uint8_t[]){0x00}, 1, 0},                    // MADCTL = 0x00
+    {0x11, NULL, 0, 200},                               // SLPOUT + 200ms
+    {0x29, NULL, 0, 0},                                 // DISPON
+    {0x3C, NULL, 0, 0},                                 // CONTINUE (0x3C, NOT 0x2C RAMWR)
 };
 
 static esp_err_t panel_gc9d01_init(esp_lcd_panel_t *panel)
@@ -248,13 +252,9 @@ static esp_err_t panel_gc9d01_init(esp_lcd_panel_t *panel)
     gc9d01_panel_t *gc9d01 = __containerof(panel, gc9d01_panel_t, base);
     esp_lcd_panel_io_handle_t io = gc9d01->io;
 
-    // exit sleep mode first (official flow)
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, LCD_CMD_SLPOUT, NULL, 0), TAG, "send command failed");
-    vTaskDelay(pdMS_TO_TICKS(120));
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, LCD_CMD_MADCTL, (uint8_t[]){ gc9d01->madctl_val }, 1), TAG, "send command failed");
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, LCD_CMD_COLMOD, (uint8_t[]){ gc9d01->colmod_val }, 1), TAG, "send command failed");
-    ESP_LOGI(TAG, "init: SLPOUT+MADCTL+COLMOD=0x%02X sent", gc9d01->colmod_val);
-
+    // GC9D01: send the FULL vendor sequence only (FE/EF inter-register enable
+    // MUST come first; MADCTL/COLMOD/SLPOUT are inside the sequence). No
+    // pre-commands before it.
     const gc9d01_lcd_init_cmd_t *init_cmds = NULL;
     uint16_t init_cmds_size = 0;
     if (gc9d01->init_cmds) {
@@ -279,7 +279,7 @@ static esp_err_t panel_gc9d01_init(esp_lcd_panel_t *panel)
         ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, init_cmds[i].cmd, init_cmds[i].data, init_cmds[i].data_bytes), TAG, "send command failed");
         vTaskDelay(pdMS_TO_TICKS(init_cmds[i].delay_ms));
     }
-    ESP_LOGI(TAG, "init: full sequence done (ends 0x29 DISPON, no RAMWR)");
+    ESP_LOGI(TAG, "init: full DualGate sequence done (ends 0x3C CONTINUE, COLMOD=0x%02X)", gc9d01->colmod_val);
 
     return ESP_OK;
 }
