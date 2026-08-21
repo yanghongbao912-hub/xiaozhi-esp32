@@ -159,10 +159,13 @@ static esp_err_t panel_gc9d01_reset(esp_lcd_panel_t *panel) {
 
     // perform hardware reset
     if (gc9d01->reset_gpio_num >= 0) {
+        ESP_LOGI(TAG, "reset: RST GPIO%d LOW (active) ...", gc9d01->reset_gpio_num);
         gpio_set_level(gc9d01->reset_gpio_num, gc9d01->reset_level);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(50));
+        ESP_LOGI(TAG, "reset: RST GPIO%d HIGH (release), wait 150ms", gc9d01->reset_gpio_num);
         gpio_set_level(gc9d01->reset_gpio_num, !gc9d01->reset_level);
-        vTaskDelay(pdMS_TO_TICKS(120));
+        vTaskDelay(pdMS_TO_TICKS(150));
+        ESP_LOGI(TAG, "reset: done, ready for init");
     } else { // perform software reset
         ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, LCD_CMD_SWRESET, NULL, 0), TAG, "send command failed");
         vTaskDelay(pdMS_TO_TICKS(120));
