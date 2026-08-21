@@ -6,6 +6,7 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
 #include "driver/spi_common.h"
+#include "driver/gpio.h"
 #include "esp_lcd_gc9a01.h"
 #include "esp_lcd_gc9d01.h"
 #include "eye_test.h"
