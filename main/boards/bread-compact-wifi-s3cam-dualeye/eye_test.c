@@ -67,7 +67,7 @@ static void test_task(void *arg) {
             io_cfg.cs_gpio_num = cs;
             io_cfg.dc_gpio_num = dc;
             io_cfg.spi_mode = 0;
-            io_cfg.pclk_hz = 20 * 1000 * 1000;
+            io_cfg.pclk_hz = 1 * 1000 * 1000;  // 1MHz: 彻底排除时钟过快/信号完整性
             io_cfg.trans_queue_depth = 10;
             io_cfg.lcd_cmd_bits = 8;
             io_cfg.lcd_param_bits = 8;
