@@ -12,7 +12,6 @@
 
 static const char *TAG = "eye_test";
 
-// Waveshare 0.71inch DualEye (GC9D01) init sequence
 static const gc9a01_lcd_init_cmd_t gc9107_lcd_init_cmds[] = {
     {0xFE, (uint8_t[]){}, 0, 0},
     {0xEF, (uint8_t[]){}, 0, 0},
@@ -68,10 +67,7 @@ static const gc9a01_lcd_init_cmd_t gc9107_lcd_init_cmds[] = {
 
 static void draw_solid(esp_lcd_panel_handle_t panel, uint16_t color, int x0, int y0, int w, int h) {
     uint8_t *buf = (uint8_t *)heap_caps_malloc(w * h * 2, MALLOC_CAP_DMA);
-    if (!buf) {
-        ESP_LOGE(TAG, "no DMA mem for %dx%d", w, h);
-        return;
-    }
+    if (!buf) return;
     for (int p = 0; p < w * h; p++) {
         buf[p * 2] = (uint8_t)(color >> 8);
         buf[p * 2 + 1] = (uint8_t)(color & 0xFF);
@@ -80,24 +76,24 @@ static void draw_solid(esp_lcd_panel_handle_t panel, uint16_t color, int x0, int
     heap_caps_free(buf);
 }
 
-static void test_task(void *arg) {
-    // MOSI/SCK fixed at the most likely positions (config.h measured):
-    //   MOSI=GPIO38->FPC11, SCK=GPIO21->FPC10
-    const int mosi = 38, sck = 21;
-    // remaining pins: GPIO45->FPC7, GPIO3->FPC8, GPIO47->FPC9
-    // permute {RST, DC, CS} over {45, 3, 47}
-    const int perms[6][3] = {
-        {45, 3, 47},   // RST=45  DC=3   CS=47  (current guess: pin7=RST pin8=DC pin9=CS)
-        {45, 47, 3},   // RST=45  DC=47  CS=3
-        {3, 45, 47},   // RST=3   DC=45  CS=47
-        {3, 47, 45},   // RST=3   DC=47  CS=45
-        {47, 45, 3},   // RST=47  DC=45  CS=3
-        {47, 3, 45},   // RST=47  DC=3   CS=45
-    };
-    const uint16_t colors[6] = {0xF800, 0x07E0, 0x001F, 0xFFE0, 0xF81F, 0x07FF};
-    const char *names[6] = {"RED", "GREEN", "BLUE", "YELLOW", "MAGENTA", "CYAN"};
+static bool next_perm(int *a, int n) {
+    int i = n - 2;
+    while (i >= 0 && a[i] >= a[i + 1]) i--;
+    if (i < 0) return false;
+    int j = n - 1;
+    while (a[j] <= a[i]) j--;
+    int t = a[i]; a[i] = a[j]; a[j] = t;
+    for (int l = i + 1, r = n - 1; l < r; l++, r--) { t = a[l]; a[l] = a[r]; a[r] = t; }
+    return true;
+}
 
-    // disable onboard RGB LED (GPIO13/48 low)
+static void test_task(void *arg) {
+    // 5 physical GPIOs (user wiring, FIXED):
+    //   GPIO38->FPC11, GPIO21->FPC10, GPIO47->FPC9, GPIO3->FPC8, GPIO45->FPC7
+    // permute all 5 signals {MOSI,SCK,CS,DC,RST} over these 5 GPIOs (120 combos)
+    int gpio[5] = {3, 21, 38, 45, 47};  // sorted seed for full permutation
+
+    // disable onboard RGB LED
     gpio_config_t off_cfg = {};
     off_cfg.pin_bit_mask = (1ULL << 13) | (1ULL << 48);
     off_cfg.mode = GPIO_MODE_OUTPUT;
@@ -106,68 +102,68 @@ static void test_task(void *arg) {
     gpio_set_level(GPIO_NUM_13, 0);
     gpio_set_level(GPIO_NUM_48, 0);
 
-    // board constructor already initialized SPI3 with config.h pins (MOSI=13);
-    // free it first, then re-init with our clean-pin mapping.
-    spi_bus_free(SPI3_HOST);
-    spi_bus_config_t buscfg = {};
-    buscfg.mosi_io_num = mosi;
-    buscfg.miso_io_num = -1;
-    buscfg.sclk_io_num = sck;
-    buscfg.quadwp_io_num = -1;
-    buscfg.quadhd_io_num = -1;
-    buscfg.max_transfer_sz = 240 * 240 * 2;
-    ESP_ERROR_CHECK(spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO));
-    ESP_LOGI(TAG, "SPI bus ready MOSI=%d SCK=%d", mosi, sck);
+    int n = 0;
+    do {
+        n++;
+        int mosi = gpio[0], sck = gpio[1], cs = gpio[2], dc = gpio[3], rst = gpio[4];
+        ESP_LOGW(TAG, "=== PERM %d/120: MOSI=%d SCK=%d CS=%d DC=%d RST=%d (WHITE) ===", n, mosi, sck, cs, dc, rst);
 
-    while (1) {
-        for (int i = 0; i < 6; i++) {
-            int rst = perms[i][0], dc = perms[i][1], cs = perms[i][2];
-            ESP_LOGW(TAG, "=== PERM %d/%d: RST=%d DC=%d CS=%d color=%s ===", i + 1, 6, rst, dc, cs, names[i]);
-
-            esp_lcd_panel_io_handle_t io = NULL;
-            esp_lcd_panel_handle_t panel = NULL;
-            esp_lcd_panel_io_spi_config_t io_cfg = {};
-            io_cfg.cs_gpio_num = cs;
-            io_cfg.dc_gpio_num = dc;
-            io_cfg.spi_mode = 0;
-            io_cfg.pclk_hz = 10 * 1000 * 1000;
-            io_cfg.trans_queue_depth = 10;
-            io_cfg.lcd_cmd_bits = 8;
-            io_cfg.lcd_param_bits = 8;
-            if (esp_lcd_new_panel_io_spi(SPI3_HOST, &io_cfg, &io) != ESP_OK) {
-                ESP_LOGE(TAG, "perm %d: io fail", i + 1);
-                continue;
-            }
-            esp_lcd_panel_dev_config_t pcfg = {};
-            pcfg.reset_gpio_num = rst;
-            pcfg.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR;
-            pcfg.bits_per_pixel = 16;
-            gc9a01_vendor_config_t vendor_cfg = {
-                .init_cmds = gc9107_lcd_init_cmds,
-                .init_cmds_size = sizeof(gc9107_lcd_init_cmds) / sizeof(gc9a01_lcd_init_cmd_t),
-            };
-            pcfg.vendor_config = &vendor_cfg;
-            if (esp_lcd_new_panel_gc9a01(io, &pcfg, &panel) != ESP_OK) {
-                ESP_LOGE(TAG, "perm %d: panel fail", i + 1);
-                esp_lcd_panel_io_del(io);
-                continue;
-            }
-            esp_lcd_panel_reset(panel);
-            esp_lcd_panel_init(panel);
-            esp_lcd_panel_invert_color(panel, true);
-            ESP_LOGI(TAG, "perm %d: drawing %s", i + 1, names[i]);
-
-            draw_solid(panel, colors[i], 40, 40, 160, 160);
-            draw_solid(panel, colors[i], 0, 0, 160, 160);
-            vTaskDelay(pdMS_TO_TICKS(4000));
-
-            esp_lcd_panel_del(panel);
-            esp_lcd_panel_io_del(io);
+        spi_bus_free(SPI3_HOST);
+        spi_bus_config_t buscfg = {};
+        buscfg.mosi_io_num = mosi;
+        buscfg.miso_io_num = -1;
+        buscfg.sclk_io_num = sck;
+        buscfg.quadwp_io_num = -1;
+        buscfg.quadhd_io_num = -1;
+        buscfg.max_transfer_sz = 240 * 240 * 2;
+        if (spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) {
+            continue;
         }
-    }
+
+        esp_lcd_panel_io_handle_t io = NULL;
+        esp_lcd_panel_handle_t panel = NULL;
+        esp_lcd_panel_io_spi_config_t io_cfg = {};
+        io_cfg.cs_gpio_num = cs;
+        io_cfg.dc_gpio_num = dc;
+        io_cfg.spi_mode = 0;
+        io_cfg.pclk_hz = 10 * 1000 * 1000;
+        io_cfg.trans_queue_depth = 10;
+        io_cfg.lcd_cmd_bits = 8;
+        io_cfg.lcd_param_bits = 8;
+        if (esp_lcd_new_panel_io_spi(SPI3_HOST, &io_cfg, &io) != ESP_OK) {
+            continue;
+        }
+        esp_lcd_panel_dev_config_t pcfg = {};
+        pcfg.reset_gpio_num = rst;
+        pcfg.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_BGR;
+        pcfg.bits_per_pixel = 16;
+        gc9a01_vendor_config_t vendor_cfg = {
+            .init_cmds = gc9107_lcd_init_cmds,
+            .init_cmds_size = sizeof(gc9107_lcd_init_cmds) / sizeof(gc9a01_lcd_init_cmd_t),
+        };
+        pcfg.vendor_config = &vendor_cfg;
+        if (esp_lcd_new_panel_gc9a01(io, &pcfg, &panel) != ESP_OK) {
+            esp_lcd_panel_io_del(io);
+            continue;
+        }
+        esp_lcd_panel_reset(panel);
+        esp_lcd_panel_init(panel);
+        esp_lcd_panel_invert_color(panel, true);
+
+        draw_solid(panel, 0xFFFF, 40, 40, 160, 160);  // white, active area
+        draw_solid(panel, 0xFFFF, 0, 0, 160, 160);    // white, cover offset guess
+        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        esp_lcd_panel_del(panel);
+        esp_lcd_panel_io_del(io);
+    } while (next_perm(gpio, 5));
+
+    ESP_LOGI(TAG, "all 120 permutations done, restarting...");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
 }
 
 void eye_test_permutation_start(void) {
-    ESP_LOGI(TAG, "starting CS/DC/RST permutation test (6 combos, 4s each)");
+    ESP_LOGI(TAG, "starting FULL permutation scan (120 combos, 2s each)");
     xTaskCreate(test_task, "eye_test", 4096, NULL, 2, NULL);
 }
