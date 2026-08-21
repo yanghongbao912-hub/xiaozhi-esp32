@@ -27,105 +27,83 @@ static void draw_solid(esp_lcd_panel_handle_t panel, uint16_t color, int w, int 
 }
 
 static void test_task(void *arg) {
-    // mappings: {SCK, MOSI, CS, DC, RST}
-    static const int maps[4][5] = {
-        {21, 13, 47, 48, 45},  // ① v3 (user's current)
-        {48, 13, 21, 47, 45},  // ② user
-        {13, 47, 21, 48, 45},  // ③ user (MOSI=47!)
-        {48, 13, 45, 47, 21},  // ④ seller
-    };
-    static const char *mnames[4] = {"①v3", "②user", "③user", "④seller"};
-    // init: 0=GC9A01(240x240), 1=GC9D01(160x160)
-    static const char *inits[2] = {"GC9A01-240", "GC9D01-160"};
+    // Clean-pin mapping: MOSI=38, SCK=21, CS=47, DC=3, RST=45
+    // GPIO13 & GPIO48 pulled LOW: onboard RGB LED disabled
+    const int mosi = 38, sck = 21, cs = 47, dc = 3, rst = 45;
+
+    gpio_config_t off_cfg = {};
+    off_cfg.pin_bit_mask = (1ULL << 13) | (1ULL << 48);
+    off_cfg.mode = GPIO_MODE_OUTPUT;
+    off_cfg.pull_down_en = GPIO_PULLDOWN_ENABLE;
+    gpio_config(&off_cfg);
+    gpio_set_level(GPIO_NUM_13, 0);
+    gpio_set_level(GPIO_NUM_48, 0);
+    ESP_LOGI(TAG, "onboard RGB LED pins 13/48 forced LOW (LED off)");
 
     while (1) {
-        int combo = 0;
-        for (int m = 0; m < 4; m++) {
-            for (int it = 0; it < 2; it++) {
-                combo++;
-                int sck = maps[m][0], mosi = maps[m][1], cs = maps[m][2], dc = maps[m][3], rst = maps[m][4];
-                int w = (it == 0) ? 240 : 160;
-                int h = (it == 0) ? 240 : 160;
-                uint16_t color;
-                switch (combo) {
-                case 1: color = 0xF800; break;  // RED
-                case 2: color = 0x07E0; break;  // GREEN
-                case 3: color = 0x001F; break;  // BLUE
-                case 4: color = 0xFFFF; break;  // WHITE
-                case 5: color = 0xFFE0; break;  // YELLOW
-                case 6: color = 0x07FF; break;  // CYAN
-                case 7: color = 0xF81F; break;  // MAGENTA
-                default: color = 0xFD20; break; // ORANGE
-                }
-                const char *cname;
-                switch (combo) {
-                case 1: cname = "RED"; break;
-                case 2: cname = "GREEN"; break;
-                case 3: cname = "BLUE"; break;
-                case 4: cname = "WHITE"; break;
-                case 5: cname = "YELLOW"; break;
-                case 6: cname = "CYAN"; break;
-                case 7: cname = "MAGENTA"; break;
-                default: cname = "ORANGE"; break;
-                }
+        for (int it = 0; it < 2; it++) {  // 0=GC9D01-160, 1=GC9A01-240
+            int w = (it == 0) ? 160 : 240;
+            int h = (it == 0) ? 160 : 240;
+            uint16_t color = (it == 0) ? 0xF800 : 0x07E0;  // RED, GREEN
+            const char *cname = (it == 0) ? "RED" : "GREEN";
+            const char *iname = (it == 0) ? "GC9D01-160" : "GC9A01-240";
 
-                spi_bus_free(SPI3_HOST);
-                spi_bus_config_t buscfg = {};
-                buscfg.mosi_io_num = mosi;
-                buscfg.miso_io_num = -1;
-                buscfg.sclk_io_num = sck;
-                buscfg.quadwp_io_num = -1;
-                buscfg.quadhd_io_num = -1;
-                buscfg.max_transfer_sz = w * h * 2;
-                if (spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) {
-                    ESP_LOGE(TAG, "combo %d: bus fail", combo);
-                    continue;
-                }
-                esp_lcd_panel_io_handle_t io = NULL;
-                esp_lcd_panel_handle_t panel = NULL;
-                esp_lcd_panel_io_spi_config_t io_cfg = {};
-                io_cfg.cs_gpio_num = cs;
-                io_cfg.dc_gpio_num = dc;
-                io_cfg.spi_mode = 0;
-                io_cfg.pclk_hz = 20 * 1000 * 1000;  // 20MHz: 杜邦线信号完整性
-                io_cfg.trans_queue_depth = 10;
-                io_cfg.lcd_cmd_bits = 8;
-                io_cfg.lcd_param_bits = 8;
-                if (esp_lcd_new_panel_io_spi(SPI3_HOST, &io_cfg, &io) != ESP_OK) {
-                    ESP_LOGE(TAG, "combo %d: io fail", combo);
-                    continue;
-                }
-                esp_lcd_panel_dev_config_t pcfg = {};
-                pcfg.reset_gpio_num = rst;
-                pcfg.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
-                pcfg.bits_per_pixel = 16;
-                if (it == 0) {
-                    if (esp_lcd_new_panel_gc9a01(io, &pcfg, &panel) != ESP_OK) {
-                        ESP_LOGE(TAG, "combo %d: gc9a01 panel fail", combo);
-                        esp_lcd_panel_io_del(io);
-                        continue;
-                    }
-                } else {
-                    if (esp_lcd_new_panel_gc9d01(io, &pcfg, &panel) != ESP_OK) {
-                        ESP_LOGE(TAG, "combo %d: gc9d01 panel fail", combo);
-                        esp_lcd_panel_io_del(io);
-                        continue;
-                    }
-                }
-                esp_lcd_panel_reset(panel);
-                esp_lcd_panel_init(panel);
-                ESP_LOGI(TAG, "combo %d/8: %s map: SCK=%d MOSI=%d CS=%d DC=%d RST=%d init=%s -> %s",
-                         combo, mnames[m], sck, mosi, cs, dc, rst, inits[it], cname);
-                draw_solid(panel, color, w, h);
-                vTaskDelay(pdMS_TO_TICKS(5000));
-                esp_lcd_panel_del(panel);
-                esp_lcd_panel_io_del(io);
+            spi_bus_free(SPI3_HOST);
+            spi_bus_config_t buscfg = {};
+            buscfg.mosi_io_num = mosi;
+            buscfg.miso_io_num = -1;
+            buscfg.sclk_io_num = sck;
+            buscfg.quadwp_io_num = -1;
+            buscfg.quadhd_io_num = -1;
+            buscfg.max_transfer_sz = w * h * 2;
+            if (spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) {
+                ESP_LOGE(TAG, "bus fail");
+                continue;
             }
+            esp_lcd_panel_io_handle_t io = NULL;
+            esp_lcd_panel_handle_t panel = NULL;
+            esp_lcd_panel_io_spi_config_t io_cfg = {};
+            io_cfg.cs_gpio_num = cs;
+            io_cfg.dc_gpio_num = dc;
+            io_cfg.spi_mode = 0;
+            io_cfg.pclk_hz = 20 * 1000 * 1000;
+            io_cfg.trans_queue_depth = 10;
+            io_cfg.lcd_cmd_bits = 8;
+            io_cfg.lcd_param_bits = 8;
+            if (esp_lcd_new_panel_io_spi(SPI3_HOST, &io_cfg, &io) != ESP_OK) {
+                ESP_LOGE(TAG, "io fail");
+                continue;
+            }
+            esp_lcd_panel_dev_config_t pcfg = {};
+            pcfg.reset_gpio_num = rst;
+            pcfg.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
+            pcfg.bits_per_pixel = 16;
+            if (it == 0) {
+                if (esp_lcd_new_panel_gc9d01(io, &pcfg, &panel) != ESP_OK) {
+                    ESP_LOGE(TAG, "gc9d01 panel fail");
+                    esp_lcd_panel_io_del(io);
+                    continue;
+                }
+            } else {
+                if (esp_lcd_new_panel_gc9a01(io, &pcfg, &panel) != ESP_OK) {
+                    ESP_LOGE(TAG, "gc9a01 panel fail");
+                    esp_lcd_panel_io_del(io);
+                    continue;
+                }
+            }
+            esp_lcd_panel_reset(panel);
+            esp_lcd_panel_init(panel);
+            ESP_LOGI(TAG, "clean-pin test: MOSI=%d SCK=%d CS=%d DC=%d RST=%d init=%s -> %s",
+                     mosi, sck, cs, dc, rst, iname, cname);
+            draw_solid(panel, color, w, h);
+            vTaskDelay(pdMS_TO_TICKS(6000));
+            esp_lcd_panel_del(panel);
+            esp_lcd_panel_io_del(io);
         }
     }
 }
 
 void eye_test_permutation_start(void) {
-    ESP_LOGI(TAG, "starting 8-combo test @20MHz (4 mappings x GC9A01-240/GC9D01-160)");
+    ESP_LOGI(TAG, "starting clean-pin test (LED off, MOSI=38, DC=3)");
     xTaskCreate(test_task, "eye_test", 4096, NULL, 2, NULL);
 }
