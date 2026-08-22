@@ -116,6 +116,18 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializeButtons();
+        // 诊断: 监控 GPIO4 电平, 确认 TTP223 输出极性
+        xTaskCreate([](void*) {
+            int last = -1;
+            while (1) {
+                int level = gpio_get_level(TOUCH_BUTTON_GPIO);
+                if (level != last) {
+                    ESP_LOGW("TouchMon", "GPIO%d level -> %d", (int)TOUCH_BUTTON_GPIO, level);
+                    last = level;
+                }
+                vTaskDelay(pdMS_TO_TICKS(30));
+            }
+        }, "touch_mon", 2048, nullptr, 1, nullptr);
 #ifdef DUALEYE_TEST_EYE
         // test mode: backlight already driven constantly in InitializeLcdDisplay
 #else
