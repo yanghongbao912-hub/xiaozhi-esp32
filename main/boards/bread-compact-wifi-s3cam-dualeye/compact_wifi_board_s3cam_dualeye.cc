@@ -100,7 +100,11 @@ private:
         });
 
         // TTP223 触摸: 点一下触发唤醒(相当于喊"你好小智")
+        touch_button_.OnPressDown([this]() {
+            ESP_LOGI(TAG, "Touch button press down");
+        });
         touch_button_.OnClick([this]() {
+            ESP_LOGI(TAG, "Touch button click -> wake word invoke");
             std::string wake_word = "你好小智";
             Application::GetInstance().WakeWordInvoke(wake_word);
         });
@@ -116,7 +120,7 @@ public:
         // test mode: backlight already driven constantly in InitializeLcdDisplay
 #else
         if (DISPLAY_BACKLIGHT_PIN != GPIO_NUM_NC) {
-            GetBacklight()->RestoreBrightness();
+            GetBacklight()->SetBrightness(100);  // 保持最高亮度
         }
 #endif
     }
