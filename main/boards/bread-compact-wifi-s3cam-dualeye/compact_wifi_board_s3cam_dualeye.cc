@@ -99,13 +99,10 @@ private:
             app.ToggleChatState();
         });
 
-        // TTP223 触摸: 点一下触发唤醒(相当于喊"你好小智")
-        touch_button_.OnPressDown([this]() {
-            ESP_LOGI(TAG, "Touch button press down");
-        });
+        // TTP223 触摸: 点一下, 小智说固定台词
         touch_button_.OnClick([this]() {
-            ESP_LOGI(TAG, "Touch button click -> wake word invoke");
-            std::string wake_word = "你好小智";
+            ESP_LOGI(TAG, "Touch button click -> speak");
+            std::string wake_word = "死鬼摸人家干嘛";
             Application::GetInstance().WakeWordInvoke(wake_word);
         });
     }
@@ -116,18 +113,6 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializeButtons();
-        // 诊断: 监控 GPIO4 电平, 确认 TTP223 输出极性
-        xTaskCreate([](void*) {
-            int last = -1;
-            while (1) {
-                int level = gpio_get_level(TOUCH_BUTTON_GPIO);
-                if (level != last) {
-                    ESP_LOGW("TouchMon", "GPIO%d level -> %d", (int)TOUCH_BUTTON_GPIO, level);
-                    last = level;
-                }
-                vTaskDelay(pdMS_TO_TICKS(30));
-            }
-        }, "touch_mon", 2048, nullptr, 1, nullptr);
 #ifdef DUALEYE_TEST_EYE
         // test mode: backlight already driven constantly in InitializeLcdDisplay
 #else
