@@ -24,18 +24,8 @@ static void draw_solid(esp_lcd_panel_handle_t panel, uint16_t color, int x0, int
 }
 
 static void test_task(void *arg) {
-    // MOSI=21, SCK=47 LOCKED. Permute {CS,DC,RST} over {3,38,45}, distinct colors.
-    const int mosi = 21, sck = 47;
-    const int perms[6][3] = {
-        {3, 38, 45},   // CS=3  DC=38 RST=45 -> RED
-        {3, 45, 38},   // CS=3  DC=45 RST=38 -> GREEN
-        {38, 3, 45},   // CS=38 DC=3  RST=45 -> BLUE
-        {38, 45, 3},   // CS=38 DC=45 RST=3  -> YELLOW
-        {45, 3, 38},   // CS=45 DC=3  RST=38 -> MAGENTA
-        {45, 38, 3},   // CS=45 DC=38 RST=3  -> CYAN
-    };
-    const uint16_t colors[6] = {0xF800, 0x07E0, 0x001F, 0xFFE0, 0xF81F, 0x07FF};
-    const char *names[6] = {"RED", "GREEN", "BLUE", "YELLOW", "MAGENTA", "CYAN"};
+    // CORRECT wiring (locked): MOSI=21 SCK=47 CS=3 DC=45 RST=38
+    const int mosi = 21, sck = 47, cs = 3, dc = 45, rst = 38;
 
     gpio_config_t off_cfg = {};
     off_cfg.pin_bit_mask = (1ULL << 13) | (1ULL << 48);
@@ -45,54 +35,52 @@ static void test_task(void *arg) {
     gpio_set_level(GPIO_NUM_13, 0);
     gpio_set_level(GPIO_NUM_48, 0);
 
+    spi_bus_free(SPI3_HOST);
+    spi_bus_config_t buscfg = {};
+    buscfg.mosi_io_num = mosi;
+    buscfg.miso_io_num = -1;
+    buscfg.sclk_io_num = sck;
+    buscfg.quadwp_io_num = -1;
+    buscfg.quadhd_io_num = -1;
+    buscfg.max_transfer_sz = 160 * 160 * 2;
+    if (spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) return;
+
+    esp_lcd_panel_io_handle_t io = NULL;
+    esp_lcd_panel_handle_t panel = NULL;
+    esp_lcd_panel_io_spi_config_t io_cfg = {};
+    io_cfg.cs_gpio_num = cs;
+    io_cfg.dc_gpio_num = dc;
+    io_cfg.spi_mode = 0;
+    io_cfg.pclk_hz = 2 * 1000 * 1000;
+    io_cfg.trans_queue_depth = 10;
+    io_cfg.lcd_cmd_bits = 8;
+    io_cfg.lcd_param_bits = 8;
+    if (esp_lcd_new_panel_io_spi(SPI3_HOST, &io_cfg, &io) != ESP_OK) return;
+
+    esp_lcd_panel_dev_config_t pcfg = {};
+    pcfg.reset_gpio_num = rst;
+    pcfg.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
+    pcfg.bits_per_pixel = 16;
+    if (esp_lcd_new_panel_gc9d01(io, &pcfg, &panel) != ESP_OK) {
+        esp_lcd_panel_io_del(io);
+        return;
+    }
+    esp_lcd_panel_reset(panel);
+    esp_lcd_panel_init(panel);
+    ESP_LOGI(TAG, "CORRECT wiring locked: MOSI=21 SCK=47 CS=3 DC=45 RST=38");
+
+    const uint16_t colors[4] = {0xF800, 0x07E0, 0x001F, 0xFFFF};
+    const char *names[4] = {"RED", "GREEN", "BLUE", "WHITE"};
     while (1) {
-        for (int i = 0; i < 6; i++) {
-            int cs = perms[i][0], dc = perms[i][1], rst = perms[i][2];
-            ESP_LOGW(TAG, "CS=%d DC=%d RST=%d -> %s", cs, dc, rst, names[i]);
-
-            spi_bus_free(SPI3_HOST);
-            spi_bus_config_t buscfg = {};
-            buscfg.mosi_io_num = mosi;
-            buscfg.miso_io_num = -1;
-            buscfg.sclk_io_num = sck;
-            buscfg.quadwp_io_num = -1;
-            buscfg.quadhd_io_num = -1;
-            buscfg.max_transfer_sz = 160 * 160 * 2;
-            if (spi_bus_initialize(SPI3_HOST, &buscfg, SPI_DMA_CH_AUTO) != ESP_OK) continue;
-
-            esp_lcd_panel_io_handle_t io = NULL;
-            esp_lcd_panel_handle_t panel = NULL;
-            esp_lcd_panel_io_spi_config_t io_cfg = {};
-            io_cfg.cs_gpio_num = cs;
-            io_cfg.dc_gpio_num = dc;
-            io_cfg.spi_mode = 0;
-            io_cfg.pclk_hz = 2 * 1000 * 1000;
-            io_cfg.trans_queue_depth = 10;
-            io_cfg.lcd_cmd_bits = 8;
-            io_cfg.lcd_param_bits = 8;
-            if (esp_lcd_new_panel_io_spi(SPI3_HOST, &io_cfg, &io) != ESP_OK) continue;
-
-            esp_lcd_panel_dev_config_t pcfg = {};
-            pcfg.reset_gpio_num = rst;
-            pcfg.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
-            pcfg.bits_per_pixel = 16;
-            if (esp_lcd_new_panel_gc9d01(io, &pcfg, &panel) != ESP_OK) {
-                esp_lcd_panel_io_del(io);
-                continue;
-            }
-            esp_lcd_panel_reset(panel);
-            esp_lcd_panel_init(panel);
-
+        for (int i = 0; i < 4; i++) {
             draw_solid(panel, colors[i], 0, 0, 160, 160);
-            vTaskDelay(pdMS_TO_TICKS(4000));
-
-            esp_lcd_panel_del(panel);
-            esp_lcd_panel_io_del(io);
+            ESP_LOGI(TAG, "drew %s", names[i]);
+            vTaskDelay(pdMS_TO_TICKS(2000));
         }
     }
 }
 
 void eye_test_permutation_start(void) {
-    ESP_LOGI(TAG, "CS/DC/RST color test (MOSI=21 SCK=47 locked)");
+    ESP_LOGI(TAG, "final verify: correct wiring, RGB+WHITE loop");
     xTaskCreate(test_task, "eye_test", 4096, NULL, 2, NULL);
 }
