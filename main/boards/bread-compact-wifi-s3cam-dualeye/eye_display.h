@@ -54,7 +54,8 @@ private:
 
     // 打盹
     int drowsy_ = 0;          // 0=清醒 1=半眯 2=快眨
-    uint32_t drowsy_until_ = 0;
+    uint32_t drowsy_until_ = 0;   // 当前打盹结束时间
+    uint32_t next_drowsy_at_ = 0; // 下次允许打盹时间
 
     static void TimerCb(lv_timer_t* timer);
     void Tick();

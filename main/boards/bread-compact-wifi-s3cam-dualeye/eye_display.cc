@@ -64,6 +64,7 @@ void EyeDisplay::SetupUI() {
     anim_timer_ = lv_timer_create(TimerCb, 40, this);
     RandomizeBlink();
     RandomizeMove();
+    next_drowsy_at_ = lv_tick_get() + 8000 + (esp_random() % 7000);
     ESP_LOGI(TAG, "Eye UI ready: pupil=%dpx on %dx%d", pupil_radius_, width_, height_);
 }
 
@@ -108,17 +109,25 @@ void EyeDisplay::Tick() {
     // 声音能量 -> 瞳孔大小目标 (能量越高瞳孔越大)
     int energy_radius = pupil_radius_ + (int)(audio_energy_ * 8.0f);
     if (energy_radius > pupil_radius_ + 8) energy_radius = pupil_radius_ + 8;
-    if (drowsy_ == 0) {
+
+    // 打盹恢复
+    if (drowsy_ != 0) {
+        if (now >= drowsy_until_) {
+            drowsy_ = 0;
+            pupil_radius_target_ = energy_radius;
+            next_drowsy_at_ = now + 6000 + (esp_random() % 9000);
+            RandomizeBlink();
+            ESP_LOGI(TAG, "drowsy done");
+        }
+    } else {
         pupil_radius_target_ = energy_radius;
+        if (now >= next_drowsy_at_) {
+            RandomizeDrowsy();
+        }
     }
 
     UpdateBlink();
     UpdatePupil();
-
-    // 打盹调度
-    if (drowsy_ == 0 && now >= drowsy_until_ && (esp_random() % 100) < 3) {
-        RandomizeDrowsy();
-    }
 
     // 随机眨眼调度
     if (blink_phase_ == BlinkPhase::kOpen && now >= next_blink_at_) {
@@ -175,11 +184,13 @@ void EyeDisplay::UpdateBlink() {
 }
 
 void EyeDisplay::UpdatePupil() {
-    // 瞳孔位置平滑逼近目标
-    if (pupil_cx_ < pupil_tx_) pupil_cx_ += 3;
-    else if (pupil_cx_ > pupil_tx_) pupil_cx_ -= 3;
-    if (pupil_cy_ < pupil_ty_) pupil_cy_ += 3;
-    else if (pupil_cy_ > pupil_ty_) pupil_cy_ -= 3;
+    // 瞳孔位置平滑逼近目标 (clamp 避免越过目标来回抖动)
+    const int step = 2;
+    if (pupil_tx_ > pupil_cx_) pupil_cx_ = (pupil_tx_ - pupil_cx_ <= step) ? pupil_tx_ : pupil_cx_ + step;
+    else if (pupil_tx_ < pupil_cx_) pupil_cx_ = (pupil_cx_ - pupil_tx_ <= step) ? pupil_tx_ : pupil_cx_ - step;
+
+    if (pupil_ty_ > pupil_cy_) pupil_cy_ = (pupil_ty_ - pupil_cy_ <= step) ? pupil_ty_ : pupil_cy_ + step;
+    else if (pupil_ty_ < pupil_cy_) pupil_cy_ = (pupil_cy_ - pupil_ty_ <= step) ? pupil_ty_ : pupil_cy_ - step;
 
     // 瞳孔大小平滑逼近目标
     if (pupil_radius_ < pupil_radius_target_) pupil_radius_++;
@@ -193,7 +204,7 @@ void EyeDisplay::UpdatePupil() {
 
     // 瞳孔到达目标后, 过一会儿回到中心
     uint32_t now = lv_tick_get();
-    if (pupil_cx_ == pupil_tx_ && pupil_cy_ == pupil_ty_ && pupil_tx_ != width_ / 2 && now >= move_back_at_) {
+    if (pupil_cx_ == pupil_tx_ && pupil_cy_ == pupil_ty_ && (pupil_tx_ != width_ / 2 || pupil_ty_ != height_ / 2) && now >= move_back_at_) {
         pupil_tx_ = width_ / 2;
         pupil_ty_ = height_ / 2;
     }
