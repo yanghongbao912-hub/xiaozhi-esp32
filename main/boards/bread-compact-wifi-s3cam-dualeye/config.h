@@ -30,7 +30,7 @@
 // GPIO48 用作屏幕 DC 信号, 与板载 RGB 灯珠(也在48)冲突 => 弃用状态灯
 #define BUILTIN_LED_GPIO        GPIO_NUM_NC
 #define BOOT_BUTTON_GPIO        GPIO_NUM_0
-#define TOUCH_BUTTON_GPIO       GPIO_NUM_NC
+#define TOUCH_BUTTON_GPIO       GPIO_NUM_4   // TTP223 触摸: 点一下唤醒
 #define VOLUME_UP_BUTTON_GPIO   GPIO_NUM_NC
 #define VOLUME_DOWN_BUTTON_GPIO GPIO_NUM_NC
 

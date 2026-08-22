@@ -24,6 +24,7 @@
 class CompactWifiBoardS3CamDualEye : public WifiBoard {
 private:
     Button boot_button_;
+    Button touch_button_;
     Display* display_;
 
     void InitializeSpi() {
@@ -97,11 +98,17 @@ private:
             }
             app.ToggleChatState();
         });
+
+        // TTP223 触摸: 点一下触发唤醒(相当于喊"你好小智")
+        touch_button_.OnClick([this]() {
+            std::string wake_word = "你好小智";
+            Application::GetInstance().WakeWordInvoke(wake_word);
+        });
     }
 
 public:
     CompactWifiBoardS3CamDualEye() :
-        boot_button_(BOOT_BUTTON_GPIO) {
+        boot_button_(BOOT_BUTTON_GPIO), touch_button_(TOUCH_BUTTON_GPIO, true) {
         InitializeSpi();
         InitializeLcdDisplay();
         InitializeButtons();
