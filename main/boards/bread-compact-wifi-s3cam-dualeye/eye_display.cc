@@ -68,12 +68,12 @@ void EyeDisplay::SetupUI() {
     lv_obj_set_style_border_width(eyelid_top_, 0, 0);
     lv_obj_set_pos(eyelid_top_, 0, -height_);
 
-    // 诊断: 临时禁用动画 timer
-    // anim_timer_ = lv_timer_create(TimerCb, 40, this);
+    // 恢复动画 timer
+    anim_timer_ = lv_timer_create(TimerCb, 40, this);
     RandomizeBlink();
     RandomizeMove();
     next_drowsy_at_ = lv_tick_get() + 8000 + (esp_random() % 7000);
-    ESP_LOGI(TAG, "Eye UI ready: pupil=%dpx (parent SetupUI called, timer DISABLED)", pupil_radius_);
+    ESP_LOGI(TAG, "Eye UI ready: pupil=%dpx (parent SetupUI called, animation ON)", pupil_radius_);
 }
 
 void EyeDisplay::SetEmotion(const char* emotion) {
