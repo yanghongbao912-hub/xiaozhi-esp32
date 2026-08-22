@@ -39,7 +39,7 @@
 //    脚7=DC  脚8=CS  脚9=SCK  脚10=MOSI  脚11=RST  脚2=LEDK(背光)
 //    (原假设 MOSI=脚11 是错误的, 全排列扫描实测确定)
 // ================================================================
-#define DUALEYE_TEST_EYE  // 测试模式: 屏播放灵动眼睛动画 + 开机颜色闪烁(验证渲染)
+// #define DUALEYE_TEST_EYE  // 测试模式(已恢复正常显示模式)
 
 #define DISPLAY_WIDTH   160
 #define DISPLAY_HEIGHT  160
@@ -59,7 +59,7 @@
 #define DISPLAY_OFFSET_X      0
 #define DISPLAY_OFFSET_Y      0
 #define DISPLAY_SPI_MODE      0
-#define DISPLAY_INVERT_COLOR  true   // IPS 屏需要反色才能正常显示黑色
+#define DISPLAY_INVERT_COLOR  false  // inversion 已由 vendor 序列 0xEC 0x70 处理, 不再额外反色
 #define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_RGB
 
 #endif // _BOARD_CONFIG_H_
