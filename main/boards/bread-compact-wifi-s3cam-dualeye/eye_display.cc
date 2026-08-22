@@ -26,10 +26,17 @@ void EyeDisplay::SetupUI() {
     if (setup_ui_called_) {
         return;
     }
-    Display::SetupUI();
-    DisplayLockGuard lock(this);
+    // 诊断: 先调用父类 SetupUI(完整 UI + 关键初始化), 再叠加眼睛
+    SpiLcdDisplay::SetupUI();
 
+    DisplayLockGuard lock(this);
     auto screen = lv_screen_active();
+    // 隐藏父类的文字/图标 UI, 只留眼睛
+    if (emoji_label_ != nullptr) lv_obj_add_flag(emoji_label_, LV_OBJ_FLAG_HIDDEN);
+    if (emoji_image_ != nullptr) lv_obj_add_flag(emoji_image_, LV_OBJ_FLAG_HIDDEN);
+    if (status_bar_ != nullptr) lv_obj_add_flag(status_bar_, LV_OBJ_FLAG_HIDDEN);
+    if (top_bar_ != nullptr) lv_obj_add_flag(top_bar_, LV_OBJ_FLAG_HIDDEN);
+
     // 眼球 = 白色圆屏背景
     lv_obj_set_style_bg_color(screen, lv_color_hex(0xFFFFFF), 0);
 
@@ -61,12 +68,12 @@ void EyeDisplay::SetupUI() {
     lv_obj_set_style_border_width(eyelid_top_, 0, 0);
     lv_obj_set_pos(eyelid_top_, 0, -height_);
 
-    // 诊断: 临时禁用动画 timer, 验证崩溃是否由 lv_timer 引起
+    // 诊断: 临时禁用动画 timer
     // anim_timer_ = lv_timer_create(TimerCb, 40, this);
     RandomizeBlink();
     RandomizeMove();
     next_drowsy_at_ = lv_tick_get() + 8000 + (esp_random() % 7000);
-    ESP_LOGI(TAG, "Eye UI ready: pupil=%dpx on %dx%d (timer DISABLED for diagnosis)", pupil_radius_, width_, height_);
+    ESP_LOGI(TAG, "Eye UI ready: pupil=%dpx (parent SetupUI called, timer DISABLED)", pupil_radius_);
 }
 
 void EyeDisplay::SetEmotion(const char* emotion) {
