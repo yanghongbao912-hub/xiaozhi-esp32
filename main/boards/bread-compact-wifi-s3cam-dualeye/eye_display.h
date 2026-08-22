@@ -5,11 +5,10 @@
 #include <lvgl.h>
 
 /**
- * @brief 灵动眼睛显示 (0.71寸双目屏, 单 CS 同步显示)
+ * @brief 魔法灵动眼睛 (0.71寸双目屏, 单 CS 同步显示)
  *
- * 继承 SpiLcdDisplay 复用面板 + LVGL 初始化, 但把 SetupUI 替换为
- * 程序化绘制的眼睛动画: 白色眼球 + 黑色瞳孔 + 上眼皮, 支持
- * 眨眼 / 眼球转动 / 随机打盹 / 瞳孔跟随声音(预留).
+ * 彩虹渐变虹膜 + 辐射纹理 + 发光光晕 + 瞳孔高光 + 闪烁星点,
+ * 支持眨眼 / 眼球转动 / 呼吸闪烁 / 打盹.
  */
 class EyeDisplay : public SpiLcdDisplay {
 public:
@@ -22,17 +21,25 @@ public:
     void SetEmotion(const char* emotion) override;
     void SetChatMessage(const char* role, const char* content) override;
 
-    // 由外部(音频)更新音量能量 0.0~1.0, 驱动瞳孔大小
     void SetAudioEnergy(float energy);
 
 private:
-    lv_obj_t* pupil_ = nullptr;      // 黑色瞳孔(圆)
-    lv_obj_t* pupil_glint_ = nullptr; // 瞳孔高光(小白圆)
-    lv_obj_t* eyelid_top_ = nullptr;  // 上眼皮(白矩形)
-    lv_obj_t* eyelid_bottom_ = nullptr; // 下眼皮(白矩形)
+    // 虹膜 (预生成位图)
+    lv_obj_t* iris_img_ = nullptr;
+    uint8_t* iris_buf_ = nullptr;
+
+    // 动态对象
+    lv_obj_t* pupil_ = nullptr;
+    lv_obj_t* pupil_glint_ = nullptr;
+    lv_obj_t* star_points_[4] = {nullptr, nullptr, nullptr, nullptr};
+    lv_obj_t* eyelid_top_ = nullptr;
     lv_timer_t* anim_timer_ = nullptr;
 
-    // 眨眼状态机
+    // 尺寸参数
+    int pupil_radius_ = 22;
+    int iris_radius_ = 52;
+
+    // 眨眼
     enum class BlinkPhase { kOpen, kClosing, kClosed, kOpening };
     BlinkPhase blink_phase_ = BlinkPhase::kOpen;
     uint32_t phase_elapsed_ = 0;
@@ -42,26 +49,29 @@ private:
     uint32_t next_blink_at_ = 0;
 
     // 瞳孔转动
-    int pupil_cx_ = 0, pupil_cy_ = 0;   // 瞳孔当前中心
-    int pupil_tx_ = 0, pupil_ty_ = 0;   // 瞳孔目标中心
+    int pupil_cx_ = 0, pupil_cy_ = 0;
+    int pupil_tx_ = 0, pupil_ty_ = 0;
     uint32_t next_move_at_ = 0;
     uint32_t move_back_at_ = 0;
 
-    // 瞳孔大小(声音能量)
-    int pupil_radius_ = 34;
-    int pupil_radius_target_ = 34;
+    // 瞳孔大小(声音)
+    int pupil_radius_target_ = 22;
     float audio_energy_ = 0.0f;
 
-    // 打盹
-    int drowsy_ = 0;          // 0=清醒 1=半眯 2=快眨
-    uint32_t drowsy_until_ = 0;   // 当前打盹结束时间
-    uint32_t next_drowsy_at_ = 0; // 下次允许打盹时间
+    // 呼吸/星点闪烁相位
+    uint32_t anim_start_ = 0;
 
+    // 打盹
+    int drowsy_ = 0;
+    uint32_t drowsy_until_ = 0;
+    uint32_t next_drowsy_at_ = 0;
+
+    void GenerateIris();
     static void TimerCb(lv_timer_t* timer);
     void Tick();
     void UpdateBlink();
     void UpdatePupil();
-    void UpdateEyelids(int open_px);  // open_px: 眼皮打开程度(0=全闭, height=全开)
+    void UpdateGlow();
     void RandomizeBlink();
     void RandomizeMove();
     void RandomizeDrowsy();
