@@ -33,6 +33,7 @@ private:
     lv_obj_t* pupil_glint_ = nullptr;
     lv_obj_t* star_points_[4] = {nullptr, nullptr, nullptr, nullptr};
     lv_obj_t* eyelid_top_ = nullptr;
+    lv_obj_t* eyelid_bottom_ = nullptr;
     lv_timer_t* anim_timer_ = nullptr;
 
     // 尺寸参数

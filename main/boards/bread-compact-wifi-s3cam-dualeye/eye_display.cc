@@ -165,13 +165,21 @@ void EyeDisplay::SetupUI() {
         lv_obj_set_pos(star_points_[i], sx - 3, sy - 3);
     }
 
-    // 上眼皮
+    // 上眼皮 (白色矩形, 从上方往下盖)
     eyelid_top_ = lv_obj_create(screen);
-    lv_obj_set_size(eyelid_top_, width_, height_);
+    lv_obj_set_size(eyelid_top_, width_, height_ / 2);
     lv_obj_set_style_radius(eyelid_top_, 0, 0);
     lv_obj_set_style_bg_color(eyelid_top_, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_width(eyelid_top_, 0, 0);
-    lv_obj_set_pos(eyelid_top_, 0, -height_);
+    lv_obj_set_pos(eyelid_top_, 0, -height_ / 2);
+
+    // 下眼皮 (白色矩形, 从下方往上抬, 与上眼皮在瞳孔中心会合)
+    eyelid_bottom_ = lv_obj_create(screen);
+    lv_obj_set_size(eyelid_bottom_, width_, height_ / 2);
+    lv_obj_set_style_radius(eyelid_bottom_, 0, 0);
+    lv_obj_set_style_bg_color(eyelid_bottom_, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_border_width(eyelid_bottom_, 0, 0);
+    lv_obj_set_pos(eyelid_bottom_, 0, height_);
 
     anim_timer_ = lv_timer_create(TimerCb, 40, this);
     anim_start_ = lv_tick_get();
@@ -247,16 +255,17 @@ void EyeDisplay::Tick() {
 
 void EyeDisplay::UpdateBlink() {
     uint32_t now = lv_tick_get();
-    int cover = 0;
+    int half = height_ / 2;  // 上下眼皮各半屏, 在瞳孔中心会合
+    int cover = 0;           // 0=睁眼, half=全闭
     switch (blink_phase_) {
     case BlinkPhase::kOpen:
         cover = 0;
         break;
     case BlinkPhase::kClosing: {
         uint32_t el = now - phase_elapsed_;
-        cover = height_ * el / blink_closing_ms_;
-        if (cover >= height_) {
-            cover = height_;
+        cover = half * el / blink_closing_ms_;
+        if (cover >= half) {
+            cover = half;
             blink_phase_ = BlinkPhase::kClosed;
             phase_elapsed_ = now;
         }
@@ -264,7 +273,7 @@ void EyeDisplay::UpdateBlink() {
     }
     case BlinkPhase::kClosed: {
         uint32_t el = now - phase_elapsed_;
-        cover = height_;
+        cover = half;
         if (el >= (uint32_t)blink_closed_ms_) {
             blink_phase_ = BlinkPhase::kOpening;
             phase_elapsed_ = now;
@@ -273,7 +282,7 @@ void EyeDisplay::UpdateBlink() {
     }
     case BlinkPhase::kOpening: {
         uint32_t el = now - phase_elapsed_;
-        cover = height_ - height_ * el / blink_opening_ms_;
+        cover = half - half * el / blink_opening_ms_;
         if (cover <= 0) {
             cover = 0;
             blink_phase_ = BlinkPhase::kOpen;
@@ -282,7 +291,10 @@ void EyeDisplay::UpdateBlink() {
         break;
     }
     }
-    lv_obj_set_pos(eyelid_top_, 0, cover - height_);
+    // 上眼皮: y = cover - half  (睁眼在屏外, 闭眼盖到中间)
+    // 下眼皮: y = height_ - cover (睁眼在屏外底部, 闭眼抬到中间)
+    lv_obj_set_pos(eyelid_top_, 0, cover - half);
+    lv_obj_set_pos(eyelid_bottom_, 0, height_ - cover);
 }
 
 void EyeDisplay::UpdatePupil() {
