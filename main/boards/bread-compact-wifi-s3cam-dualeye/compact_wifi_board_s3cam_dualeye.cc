@@ -7,9 +7,11 @@
 #include "button.h"
 #include "config.h"
 #include "mcp_server.h"
+#include "pca9685.h"
 
 #include <esp_log.h>
 #include <driver/spi_common.h>
+#include <driver/i2c_master.h>
 #include <esp_lcd_panel_io.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_vendor.h>
@@ -26,6 +28,63 @@ private:
     Button boot_button_;
     Button touch_button_;
     Display* display_;
+    i2c_master_bus_handle_t servo_i2c_bus_ = nullptr;
+    Pca9685* pca9685_ = nullptr;
+
+    void InitializeServo() {
+        i2c_master_bus_config_t bus_config = {
+            .i2c_port = (i2c_port_t)1,
+            .sda_io_num = SERVO_SDA_PIN,
+            .scl_io_num = SERVO_SCL_PIN,
+            .clk_source = I2C_CLK_SRC_DEFAULT,
+            .glitch_ignore_cnt = 7,
+            .intr_priority = 0,
+            .trans_queue_depth = 0,
+            .flags = {
+                .enable_internal_pullup = 1,
+            },
+        };
+        if (i2c_new_master_bus(&bus_config, &servo_i2c_bus_) != ESP_OK) {
+            ESP_LOGE(TAG, "I2C bus init failed (SDA=%d SCL=%d)", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN);
+            return;
+        }
+        pca9685_ = new Pca9685(servo_i2c_bus_, PCA9685_I2C_ADDR);
+        if (pca9685_->Init() != ESP_OK) {
+            ESP_LOGE(TAG, "PCA9685 init failed, check wiring (SDA=%d SCL=%d, V+ 5V?)", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN);
+        }
+        ESP_LOGI(TAG, "Servo I2C ready: SDA=%d SCL=%d, PCA9685 addr=0x%02X", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN, PCA9685_I2C_ADDR);
+    }
+
+    static void ServoTestTask(void* arg) {
+        auto* board = static_cast<CompactWifiBoardS3CamDualEye*>(arg);
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        if (board->pca9685_ == nullptr) {
+            ESP_LOGE(TAG, "PCA9685 not ready, servo test skipped");
+            vTaskDelete(nullptr);
+            return;
+        }
+        ESP_LOGW(TAG, "Servo test: sweep channels 0..7 (0->180->0)");
+        // 依次测 8 个通道: 0°->180°->0°
+        for (int ch = 0; ch < 8; ch++) {
+            board->pca9685_->SetServoAngle(ch, 0);
+            vTaskDelay(pdMS_TO_TICKS(300));
+            board->pca9685_->SetServoAngle(ch, 180);
+            vTaskDelay(pdMS_TO_TICKS(500));
+            board->pca9685_->SetServoAngle(ch, 0);
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+        // 循环: 通道0 来回摆动, 持续验证
+        ESP_LOGW(TAG, "Servo test done sweep, now channel 0 oscillate");
+        int dir = 1;
+        float ang = 0;
+        while (1) {
+            board->pca9685_->SetServoAngle(0, ang);
+            ang += dir * 5;
+            if (ang >= 180) dir = -1;
+            if (ang <= 0) dir = 1;
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+    }
 
     void InitializeSpi() {
         spi_bus_config_t buscfg = {};
@@ -113,6 +172,8 @@ public:
         InitializeSpi();
         InitializeLcdDisplay();
         InitializeButtons();
+        InitializeServo();
+        xTaskCreate(ServoTestTask, "servo_test", 4096, this, 1, nullptr);
 #ifdef DUALEYE_TEST_EYE
         // test mode: backlight already driven constantly in InitializeLcdDisplay
 #else

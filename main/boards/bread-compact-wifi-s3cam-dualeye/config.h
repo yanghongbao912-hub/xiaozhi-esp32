@@ -62,4 +62,11 @@
 #define DISPLAY_INVERT_COLOR  false  // inversion 已由 vendor 序列 0xEC 0x70 处理, 不再额外反色
 #define DISPLAY_RGB_ORDER  LCD_RGB_ELEMENT_ORDER_RGB
 
+// ================================================================
+//  PCA9685 舵机驱动板 (I2C) — 8 个 MG90S 四足机器人
+// ================================================================
+#define SERVO_SDA_PIN        GPIO_NUM_8
+#define SERVO_SCL_PIN        GPIO_NUM_9
+#define PCA9685_I2C_ADDR     0x40
+
 #endif // _BOARD_CONFIG_H_
