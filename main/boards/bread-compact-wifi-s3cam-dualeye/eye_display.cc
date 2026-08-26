@@ -165,6 +165,8 @@ void EyeDisplay::SetupUI() {
         lv_obj_set_pos(star_points_[i], sx - 3, sy - 3);
     }
 
+    // 眨眼已取消: 眼皮不创建, 保持睁眼状态
+#if 0
     // 上眼皮 (白色矩形, 从上方往下盖)
     eyelid_top_ = lv_obj_create(screen);
     lv_obj_set_size(eyelid_top_, width_, height_ / 2);
@@ -180,6 +182,7 @@ void EyeDisplay::SetupUI() {
     lv_obj_set_style_bg_color(eyelid_bottom_, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_border_width(eyelid_bottom_, 0, 0);
     lv_obj_set_pos(eyelid_bottom_, 0, height_);
+#endif
 
     anim_timer_ = lv_timer_create(TimerCb, 40, this);
     anim_start_ = lv_tick_get();
@@ -240,14 +243,9 @@ void EyeDisplay::Tick() {
         }
     }
 
-    UpdateBlink();
     UpdatePupil();
     UpdateGlow();
-
-    if (blink_phase_ == BlinkPhase::kOpen && now >= next_blink_at_) {
-        blink_phase_ = BlinkPhase::kClosing;
-        phase_elapsed_ = 0;
-    }
+    // 眨眼已取消, 保留眼球转动
     if (now >= next_move_at_) {
         RandomizeMove();
     }
