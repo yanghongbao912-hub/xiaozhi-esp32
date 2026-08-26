@@ -19,5 +19,5 @@ public:
     void SetServoPulseUs(uint8_t channel, uint16_t pulse_us); // 直接设脉宽(us)
 
 private:
-    void WriteRegs(uint8_t reg, const uint8_t* data, size_t len);
+    esp_err_t WriteRegs(uint8_t reg, const uint8_t* data, size_t len);
 };
