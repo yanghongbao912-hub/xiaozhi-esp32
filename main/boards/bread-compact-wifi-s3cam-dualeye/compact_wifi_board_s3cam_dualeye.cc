@@ -48,6 +48,18 @@ private:
             ESP_LOGE(TAG, "I2C bus init failed (SDA=%d SCL=%d)", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN);
             return;
         }
+        // 诊断: 扫描 I2C 总线, 看 PCA9685 是否在总线上
+        ESP_LOGI(TAG, "I2C scan on SDA=%d SCL=%d:", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN);
+        bool found = false;
+        for (int addr = 0x08; addr <= 0x77; addr++) {
+            if (i2c_master_probe(servo_i2c_bus_, addr, 50) == ESP_OK) {
+                ESP_LOGI(TAG, "  I2C device found @ 0x%02X", addr);
+                found = true;
+            }
+        }
+        if (!found) {
+            ESP_LOGE(TAG, "  NO I2C device found! Check: SDA/SCL wiring, VCC 3V3, V+ 5V, GND, pullup");
+        }
         pca9685_ = new Pca9685(servo_i2c_bus_, PCA9685_I2C_ADDR);
         if (pca9685_->Init() != ESP_OK) {
             ESP_LOGE(TAG, "PCA9685 init failed, check wiring (SDA=%d SCL=%d, V+ 5V?)", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN);
