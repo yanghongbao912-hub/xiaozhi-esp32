@@ -82,20 +82,15 @@ private:
             vTaskDelay(pdMS_TO_TICKS(300));
             board->pca9685_->SetServoAngle(ch, 180);
             vTaskDelay(pdMS_TO_TICKS(500));
-            board->pca9685_->SetServoAngle(ch, 0);
+            board->pca9685_->SetServoAngle(ch, 90);
             vTaskDelay(pdMS_TO_TICKS(500));
         }
-        // 循环: 通道0 来回摆动, 持续验证
-        ESP_LOGW(TAG, "Servo test done sweep, now channel 0 oscillate");
-        int dir = 1;
-        float ang = 0;
-        while (1) {
-            board->pca9685_->SetServoAngle(0, ang);
-            ang += dir * 5;
-            if (ang >= 180) dir = -1;
-            if (ang <= 0) dir = 1;
-            vTaskDelay(pdMS_TO_TICKS(20));
+        // 全部转到中立位 90°, 方便安装四足支架
+        ESP_LOGW(TAG, "Servo test done. All 8 channels set to 90 degree (neutral) for assembly");
+        for (int ch = 0; ch < 8; ch++) {
+            board->pca9685_->SetServoAngle(ch, 90);
         }
+        vTaskDelete(nullptr);
     }
 
     void InitializeSpi() {
