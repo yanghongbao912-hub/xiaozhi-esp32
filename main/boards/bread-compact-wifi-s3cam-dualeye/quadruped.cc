@@ -468,7 +468,8 @@ bool QuadrupedController::SolveIK(float x, float z, float& hip_deg, float& knee_
     float cos_k = (d * d - l1 * l1 - l2 * l2) / (2.0f * l1 * l2);
     cos_k = ClampF(cos_k, -1.0f, 1.0f);
     float knee = acosf(cos_k);                 // 膝弯曲角 (0=伸直)
-    float hip = atan2f(x, z) - atan2f(l2 * sinf(knee), l1 + l2 * cosf(knee));
+    // 髋角 = 髋-足连线角 + 大腿与连线夹角 (标准2-DOF腿IK, z轴向下, 加号)
+    float hip = atan2f(x, z) + atan2f(l2 * sinf(knee), l1 + l2 * cosf(knee));
     hip_deg = hip * 180.0f / 3.14159265f;      // 髋角: 0=腿垂直, 正=向前
     knee_deg = knee * 180.0f / 3.14159265f;
     return true;

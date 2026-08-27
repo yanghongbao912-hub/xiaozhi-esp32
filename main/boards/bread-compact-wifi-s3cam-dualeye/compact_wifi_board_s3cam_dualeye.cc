@@ -58,6 +58,7 @@ private:
             if (i2c_master_probe(servo_i2c_bus_, addr, 50) == ESP_OK) {
                 ESP_LOGI(TAG, "  I2C device found @ 0x%02X", addr);
                 found = true;
+                if (addr == PCA9685_I2C_ADDR) break;   // 找到舵机板, 停止扫描(省启动时间)
             }
         }
         if (!found) {
@@ -204,9 +205,9 @@ private:
                 return true;
             });
 
-        // 5) 演示 (9 姿势 + 六方向步态, 约45秒; 演示结束后回到立正待命)
+        // 5) 演示 (9 姿势 + WALK/WAVE 步态, 约45秒; 演示结束后回到立正待命)
         mcp_server.AddTool("self.robot.demo",
-            "四足机器人开机演示: 依次展示9种预设姿势, 然后TROT对角步态走六个方向, 最后WAVE波浪步态前进, "
+            "四足机器人演示: 依次展示9种预设姿势, 然后WALK逆运动学步态走前后左右转, 最后WAVE波浪步态前进, "
             "约45秒, 结束后自动回立正待命。想看演示时调用, 演示期间语音指令会被覆盖, 结束后恢复。",
             PropertyList(),
             [this](const PropertyList& properties) -> ReturnValue {
