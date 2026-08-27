@@ -26,8 +26,9 @@ struct QuadLegCh {
 
 // 步态
 enum class QuadGait {
-    kWave,   // 波浪: 每次抬一腿
-    kTrot,   // 对角: 对角两腿同步
+    kWalk,   // 对角步行(3腿着地, 最稳, 逆运动学+摆线足端轨迹)
+    kWave,   // 波浪: 每次抬一腿(简谐)
+    kTrot,   // 对角: 对角两腿同步(快, 需大扭矩)
 };
 
 // 方向 (与参数表 direction 的值一一对应: 0..6)
@@ -48,24 +49,31 @@ enum class QuadPose {
     kWiggle,       // 扭屁股 (持续动画)
 };
 
-// 可配置参数表: 26 项连续 float, 存 NVS 断电不丢
+// 可配置参数表: 31 项连续 float, 存 NVS 断电不丢
 struct QuadParams {
     // id 0..9 运动参数
-    float gait = 1.0f;               //  0: 0=WAVE 1=TROT
+    float gait = 0.0f;               //  0: 0=WALK(对角步行,逆运动学) 1=WAVE 2=TROT
     float direction = 6.0f;          //  1: 0前进 1后退 2左转 3右转 4左移 5右移 6停
     float speed = 0.5f;              //  2: 速度 0~1 (平滑加速)
-    float hip_amp = 45.0f;           //  3: 步幅(髋摆幅, 度)
-    float knee_amp = 40.0f;          //  4: 抬腿高度(膝弯曲, 度)
+    float hip_amp = 45.0f;           //  3: 步幅(髋摆幅, 度; 仅WAVE/TROT用)
+    float knee_amp = 40.0f;          //  4: 抬腿高度(膝弯曲, 度; 仅WAVE/TROT用)
     float phase_step = 0.035f;       //  5: 步频 TROT (相位/tick)
     float phase_step_wave = 0.015f;  //  6: 步频 WAVE
     float smooth_step = 3.0f;        //  7: 每tick最大角度变化(度, 防暴冲)
     float accel_limit = 1.5f;        //  8: 加速度限幅(度/tick², 平滑加速)
     float angle_limit = 60.0f;       //  9: 角度限幅(相对中立, 度)
-    // id 10..25 每舵机配置
-    float hip_rev[4] = {0, 1, 0, 1};   // 10-13: 髋舵机反转(机械装反时)
-    float knee_rev[4] = {0, 1, 0, 1};  // 14-17: 膝舵机反转
-    float hip_trim[4] = {0, 0, 0, 0};  // 18-21: 髋中立微调(度)
-    float knee_trim[4] = {0, 0, 0, 0}; // 22-25: 膝中立微调(度)
+    // id 10..15 逆运动学几何 (WALK 步态)
+    float l1 = 40.0f;                // 10: 大腿长(髋到膝, mm)
+    float l2 = 40.0f;                // 11: 小腿长(膝到足, mm)
+    float body_height = 70.0f;       // 12: 机身高度(髋到地, mm, 略小于l1+l2)
+    float step_len = 30.0f;          // 13: 步幅(足端前后行程, mm)
+    float lift_height = 12.0f;       // 14: 抬腿高度(摆动相, mm)
+    float duty = 0.75f;              // 15: 占空比(支撑相比例, 0.5~0.9)
+    // id 16..31 每舵机配置
+    float hip_rev[4] = {0, 1, 0, 1};   // 16-19: 髋舵机反转(机械装反时)
+    float knee_rev[4] = {0, 1, 0, 1};  // 20-23: 膝舵机反转
+    float hip_trim[4] = {0, 0, 0, 0};  // 24-27: 髋中立微调(度)
+    float knee_trim[4] = {0, 0, 0, 0}; // 28-31: 膝中立微调(度)
 };
 
 class QuadrupedController {
@@ -84,7 +92,7 @@ public:
     void SetServoReverse(int leg, bool hip_rev, bool knee_rev);
 
     // ---- 参数表 (网页/串口/AI) ----
-    static int ParamCount() { return 26; }
+    static int ParamCount() { return 32; }
     static const char* ParamName(int id);
     bool SetParam(int id, float v);    // 同步内部状态并持久化
     float GetParam(int id) const;
@@ -107,7 +115,7 @@ private:
     bool knee_rev_[4] = {false, true, false, true};
     int hip_trim_[4] = {0, 0, 0, 0};
     int knee_trim_[4] = {0, 0, 0, 0};
-    QuadGait gait_ = QuadGait::kTrot;
+    QuadGait gait_ = QuadGait::kWalk;
     QuadDir dir_ = QuadDir::kStop;
     float speed_ = 0.5f;
 
@@ -116,6 +124,7 @@ private:
     float knee_cur_[4] = {0, 0, 0, 0};
     float prev_delta_[4][2] = {{0}};        // 上一tick角度变化(加速度限幅用)
     float phase_ = 0.0f;                    // 步态相位 0~1
+    int boot_tick_ = 0;                     // 上电软启动计数
 
     // 姿势 tween (smoothstep 缓动)
     bool pose_mode_ = false;
@@ -142,4 +151,7 @@ private:
     void TickAmpRamp();
     void TickPose(float tstep);
     void TickGait();
+    void TickWalk();                       // WALK: 逆运动学 + 摆线足端轨迹
+    bool SolveIK(float x, float z, float& hip_deg, float& knee_deg);
+    float SmoothJoint(int leg, bool is_knee, float target);  // 限速+加速度限幅
 };

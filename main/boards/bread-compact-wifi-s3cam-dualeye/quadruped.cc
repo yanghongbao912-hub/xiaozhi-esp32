@@ -12,7 +12,7 @@
 #define KEY_NEUTRAL "neutral"   // 中立校准: 8 个 float
 #define KEY_PARAMS  "params"    // 参数表: QuadParams blob
 
-static_assert(sizeof(QuadParams) == 26 * 4, "QuadParams must be 26 contiguous floats");
+static_assert(sizeof(QuadParams) == 32 * 4, "QuadParams must be 32 contiguous floats");
 
 static float ClampF(float v, float lo, float hi) {
     return (v < lo) ? lo : (v > hi) ? hi : v;
@@ -23,15 +23,16 @@ QuadrupedController::QuadrupedController(Pca9685* pca) : pca_(pca) {}
 // ---------------- 参数表 ----------------
 
 const char* QuadrupedController::ParamName(int id) {
-    static const char* names[26] = {
+    static const char* names[32] = {
         "gait", "direction", "speed", "hip_amp", "knee_amp",
         "phase_step", "phase_step_wave", "smooth_step", "accel_limit", "angle_limit",
+        "l1", "l2", "body_height", "step_len", "lift_height", "duty",
         "hip_rev_0", "hip_rev_1", "hip_rev_2", "hip_rev_3",
         "knee_rev_0", "knee_rev_1", "knee_rev_2", "knee_rev_3",
         "hip_trim_0", "hip_trim_1", "hip_trim_2", "hip_trim_3",
         "knee_trim_0", "knee_trim_1", "knee_trim_2", "knee_trim_3",
     };
-    return (id >= 0 && id < 26) ? names[id] : "";
+    return (id >= 0 && id < 32) ? names[id] : "";
 }
 
 float QuadrupedController::GetParam(int id) const {
@@ -44,8 +45,10 @@ bool QuadrupedController::SetParam(int id, float v) {
     float* p = (float*)&params_.gait;
     p[id] = v;
     switch (id) {
-    case 0:  // gait
-        gait_ = (v < 0.5f) ? QuadGait::kWave : QuadGait::kTrot;
+    case 0:  // gait: 0=WALK 1=WAVE 2=TROT
+        if (v < 0.5f) gait_ = QuadGait::kWalk;
+        else if (v < 1.5f) gait_ = QuadGait::kWave;
+        else gait_ = QuadGait::kTrot;
         break;
     case 1:  // direction: 走零突变切换
         if (v < 0) v = 0;
@@ -57,20 +60,20 @@ bool QuadrupedController::SetParam(int id, float v) {
         speed_ = ClampF(v, 0.0f, 1.0f);
         p[id] = speed_;
         break;
-    case 10: case 11: case 12: case 13:
-        hip_rev_[id - 10] = (v != 0.0f);
+    case 16: case 17: case 18: case 19:
+        hip_rev_[id - 16] = (v != 0.0f);
         break;
-    case 14: case 15: case 16: case 17:
-        knee_rev_[id - 14] = (v != 0.0f);
+    case 20: case 21: case 22: case 23:
+        knee_rev_[id - 20] = (v != 0.0f);
         break;
-    case 18: case 19: case 20: case 21:
-        hip_trim_[id - 18] = (int)v;
+    case 24: case 25: case 26: case 27:
+        hip_trim_[id - 24] = (int)v;
         break;
-    case 22: case 23: case 24: case 25:
-        knee_trim_[id - 22] = (int)v;
+    case 28: case 29: case 30: case 31:
+        knee_trim_[id - 28] = (int)v;
         break;
     default:
-        break;  // 3..9 直接生效
+        break;  // 3..15 直接生效
     }
     SaveParams();
     return true;
@@ -108,7 +111,9 @@ void QuadrupedController::LoadParamsFromNvs() {
 }
 
 void QuadrupedController::SyncFromParams() {
-    gait_ = (params_.gait < 0.5f) ? QuadGait::kWave : QuadGait::kTrot;
+    if (params_.gait < 0.5f) gait_ = QuadGait::kWalk;
+    else if (params_.gait < 1.5f) gait_ = QuadGait::kWave;
+    else gait_ = QuadGait::kTrot;
     float d = params_.direction;
     if (d < 0) d = 0;
     if (d > (float)QuadDir::kStop) d = (float)QuadDir::kStop;
@@ -126,7 +131,7 @@ void QuadrupedController::SyncFromParams() {
 
 void QuadrupedController::SetGait(QuadGait g) {
     gait_ = g;
-    params_.gait = (g == QuadGait::kWave) ? 0.0f : 1.0f;
+    params_.gait = (float)(int)g;
 }
 
 void QuadrupedController::SetDirection(QuadDir d) {
@@ -225,7 +230,8 @@ void QuadrupedController::Init() {
     SyncFromParams();
     LoadNeutralFromNvs();
     ESP_LOGI(TAG, "Quadruped ready, gait=%s dir=%d speed=%.2f, 8 servos",
-             gait_ == QuadGait::kWave ? "WAVE" : "TROT", (int)dir_, speed_);
+             gait_ == QuadGait::kWalk ? "WALK" : gait_ == QuadGait::kWave ? "WAVE" : "TROT",
+             (int)dir_, speed_);
 }
 
 void QuadrupedController::CalibrateNeutral() {
@@ -266,12 +272,17 @@ void QuadrupedController::Tick() {
     float tstep = 0.025f + speed_ * 0.05f;   // 缓动速度: 慢速时过渡更柔和
     if (pose_mode_) {
         TickPose(tstep);
+    } else if (gait_ == QuadGait::kWalk) {
+        TickWalk();
     } else {
         TickGait();
     }
+    // 上电软启动: 前4个tick依次加入各腿(每20ms一条, 80ms完成), 避免8舵机同时上电冲击电流
+    if (boot_tick_ < 4) boot_tick_++;
+    int nleg = (boot_tick_ < 4) ? boot_tick_ : 4;
     // 输出到舵机
     for (int leg = 0; leg < 4; leg++) {
-        ApplyLeg(leg, hip_cur_[leg], knee_cur_[leg]);
+        if (leg < nleg) ApplyLeg(leg, hip_cur_[leg], knee_cur_[leg]);
     }
 }
 
@@ -369,8 +380,6 @@ void QuadrupedController::TickGait() {
     float amp = params_.hip_amp * speed_ * amp_;   // 幅度(含方向切换 ramp)
     float kamp = params_.knee_amp * speed_ * amp_;
     float lim = params_.angle_limit;
-    float smooth = params_.smooth_step;
-    float alimit = params_.accel_limit;
 
     for (int leg = 0; leg < 4; leg++) {
         float ph = leg_ph[leg];
@@ -413,30 +422,91 @@ void QuadrupedController::TickGait() {
         target_hip = ClampF(target_hip, -lim, lim);
         target_knee = ClampF(target_knee, -lim, lim);
 
-        // 限速 + 加速度限幅 (平滑加速, 防暴冲)
-        float dh = target_hip - hip_cur_[leg];
-        if (fabsf(dh) <= smooth) {
-            hip_cur_[leg] = target_hip;
-            prev_delta_[leg][0] = 0.0f;
+        hip_cur_[leg] = SmoothJoint(leg, false, target_hip);
+        knee_cur_[leg] = SmoothJoint(leg, true, target_knee);
+    }
+}
+
+// 限速 + 加速度限幅 (平滑加速, 防暴冲)
+float QuadrupedController::SmoothJoint(int leg, bool is_knee, float target) {
+    float cur = is_knee ? knee_cur_[leg] : hip_cur_[leg];
+    float smooth = params_.smooth_step;
+    float alimit = params_.accel_limit;
+    int idx = is_knee ? 1 : 0;
+    float d = target - cur;
+    if (fabsf(d) <= smooth) {
+        prev_delta_[leg][idx] = 0.0f;
+        return target;
+    }
+    float delta = (d > 0) ? smooth : -smooth;
+    float dd = delta - prev_delta_[leg][idx];
+    if (dd > alimit) delta = prev_delta_[leg][idx] + alimit;
+    else if (dd < -alimit) delta = prev_delta_[leg][idx] - alimit;
+    prev_delta_[leg][idx] = delta;
+    return cur + delta;
+}
+
+// 2-DOF 腿逆运动学: 已知足端(x前,z下), 求髋角/膝角(度). z轴向下为正
+bool QuadrupedController::SolveIK(float x, float z, float& hip_deg, float& knee_deg) {
+    float l1 = params_.l1;
+    float l2 = params_.l2;
+    float d = sqrtf(x * x + z * z);
+    if (d > l1 + l2) d = l1 + l2;              // 超程 clamp 到可达边界
+    if (d < fabsf(l1 - l2)) d = fabsf(l1 - l2);
+    float cos_k = (d * d - l1 * l1 - l2 * l2) / (2.0f * l1 * l2);
+    cos_k = ClampF(cos_k, -1.0f, 1.0f);
+    float knee = acosf(cos_k);                 // 膝弯曲角 (0=伸直)
+    float hip = atan2f(x, z) - atan2f(l2 * sinf(knee), l1 + l2 * cosf(knee));
+    hip_deg = hip * 180.0f / 3.14159265f;      // 髋角: 0=腿垂直, 正=向前
+    knee_deg = knee * 180.0f / 3.14159265f;
+    return true;
+}
+
+// WALK 步态: 逆运动学 + 摆线足端轨迹 + 恒机身高度 (最稳, 3腿着地)
+void QuadrupedController::TickWalk() {
+    float pstep = params_.phase_step_wave;
+    phase_ += pstep * (0.4f + speed_ * 0.8f);
+    if (phase_ > 1.0f) phase_ -= 1.0f;
+
+    // Walk 对角落腿序列相位 (LF, RF, LH, RH)
+    static const float walk_ph[4] = {0.0f, 0.5f, 0.25f, 0.75f};
+    float duty = params_.duty;
+    float S = params_.step_len * amp_;     // 步幅 (含方向切换 ramp)
+    float H = params_.lift_height;
+    float z0 = params_.body_height;
+
+    for (int leg = 0; leg < 4; leg++) {
+        float p = phase_ + walk_ph[leg];
+        if (p >= 1.0f) p -= 1.0f;
+
+        float fx, fz;
+        if (p < duty) {
+            // 支撑相: 足端相对身体向后直线移动, z恒定(机身不颠)
+            float t = p / duty;
+            fx = S / 2.0f - S * t;
+            fz = z0;
         } else {
-            float delta = (dh > 0) ? smooth : -smooth;
-            float dd = delta - prev_delta_[leg][0];
-            if (dd > alimit) delta = prev_delta_[leg][0] + alimit;
-            else if (dd < -alimit) delta = prev_delta_[leg][0] - alimit;
-            hip_cur_[leg] += delta;
-            prev_delta_[leg][0] = delta;
+            // 摆动相: 摆线, 起落点速度=0(零冲击), 抬腿H
+            float u = (p - duty) / (1.0f - duty) * 2.0f * 3.14159265f;
+            fx = -S / 2.0f + (S / (2.0f * 3.14159265f)) * (u - sinf(u));
+            fz = z0 - (H / 2.0f) * (1.0f - cosf(u));
         }
-        float dk = target_knee - knee_cur_[leg];
-        if (fabsf(dk) <= smooth) {
-            knee_cur_[leg] = target_knee;
-            prev_delta_[leg][1] = 0.0f;
-        } else {
-            float delta = (dk > 0) ? smooth : -smooth;
-            float dd = delta - prev_delta_[leg][1];
-            if (dd > alimit) delta = prev_delta_[leg][1] + alimit;
-            else if (dd < -alimit) delta = prev_delta_[leg][1] - alimit;
-            knee_cur_[leg] += delta;
-            prev_delta_[leg][1] = delta;
-        }
+
+        // 方向: 前进正常, 后退反向, 原地转左右腿反向 (2-DOF无横移)
+        float x = fx;
+        if (dir_ == QuadDir::kBackward) x = -fx;
+        else if (dir_ == QuadDir::kTurnLeft) x = (leg == 0 || leg == 2) ? fx : -fx;
+        else if (dir_ == QuadDir::kTurnRight) x = (leg == 0 || leg == 2) ? -fx : fx;
+        else if (dir_ == QuadDir::kShiftLeft || dir_ == QuadDir::kShiftRight) x = 0;
+        // kForward / kStop: 用 fx, kStop 时 amp_ 渐变归零, 足端自然回中立
+
+        float hip_deg, knee_deg;
+        SolveIK(x, fz, hip_deg, knee_deg);
+        float lim = params_.angle_limit;
+        hip_deg = ClampF(hip_deg, -lim, lim);
+        knee_deg = ClampF(knee_deg, -lim, lim);
+
+        hip_cur_[leg] = SmoothJoint(leg, false, hip_deg);
+        knee_cur_[leg] = SmoothJoint(leg, true, knee_deg);
     }
 }

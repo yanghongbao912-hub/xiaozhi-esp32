@@ -111,15 +111,13 @@ private:
         board->quadruped_->SetPose(QuadPose::kWiggle);    vTaskDelay(pdMS_TO_TICKS(2500));
         board->quadruped_->SetPose(QuadPose::kNeutral);   vTaskDelay(pdMS_TO_TICKS(1500));
 
-        // 步态演示 (TROT + WAVE)
-        ESP_LOGW(TAG, "=== Quadruped demo: gait TROT forward ===");
-        board->quadruped_->SetGait(QuadGait::kTrot);
+        // 步态演示 (WALK 逆运动学 + WAVE 简谐)
+        ESP_LOGW(TAG, "=== Quadruped demo: gait WALK forward (IK) ===");
+        board->quadruped_->SetGait(QuadGait::kWalk);
         board->quadruped_->SetDirection(QuadDir::kForward);  vTaskDelay(pdMS_TO_TICKS(3000));
         board->quadruped_->SetDirection(QuadDir::kBackward); vTaskDelay(pdMS_TO_TICKS(3000));
         board->quadruped_->SetDirection(QuadDir::kTurnLeft); vTaskDelay(pdMS_TO_TICKS(2500));
         board->quadruped_->SetDirection(QuadDir::kTurnRight); vTaskDelay(pdMS_TO_TICKS(2500));
-        board->quadruped_->SetDirection(QuadDir::kShiftLeft); vTaskDelay(pdMS_TO_TICKS(2500));
-        board->quadruped_->SetDirection(QuadDir::kShiftRight); vTaskDelay(pdMS_TO_TICKS(2500));
         ESP_LOGW(TAG, "=== Quadruped demo: gait WAVE forward ===");
         board->quadruped_->SetGait(QuadGait::kWave);
         board->quadruped_->SetDirection(QuadDir::kForward);  vTaskDelay(pdMS_TO_TICKS(3000));
@@ -139,11 +137,11 @@ private:
 
         // 1) 运动控制: 步态 + 方向 + 速度
         mcp_server.AddTool("self.robot.gait",
-            "四足机器人运动控制。gait: 步态, 0=波浪WAVE(每次抬一腿,最稳) 1=对角TROT(对角两腿,快); "
+            "四足机器人运动控制。gait: 步态, 0=WALK对角步行(逆运动学+摆线轨迹,最稳推荐) 1=WAVE波浪(每次抬一腿) 2=TROT对角(两腿同步,快但需大扭矩); "
             "direction: 方向, 0=前进 1=后退 2=左转 3=右转 4=左平移 5=右平移 6=停止; "
             "speed: 速度 0-100, 平滑加速。方向切换自动先减速归零再反向, 不会抽筋。",
             PropertyList({
-                Property("gait", kPropertyTypeInteger, 1, 0, 1),
+                Property("gait", kPropertyTypeInteger, 0, 0, 2),
                 Property("direction", kPropertyTypeInteger, 6, 0, 6),
                 Property("speed", kPropertyTypeInteger, 60, 0, 100)
             }),
@@ -152,7 +150,7 @@ private:
                 int direction = properties["direction"].value<int>();
                 int speed = properties["speed"].value<int>();
                 quadruped_->SetPose(QuadPose::kNeutral);   // 退出姿势模式, 回到步态
-                quadruped_->SetGait(gait == 0 ? QuadGait::kWave : QuadGait::kTrot);
+                quadruped_->SetGait(gait == 0 ? QuadGait::kWalk : gait == 1 ? QuadGait::kWave : QuadGait::kTrot);
                 quadruped_->SetSpeed(speed / 100.0f);
                 quadruped_->SetDirection((QuadDir)direction);
                 return true;
@@ -174,12 +172,13 @@ private:
 
         // 3) 参数配置 (网页/AI 调步幅/抬腿/步频/限幅/舵机反转等, 存 NVS 断电不丢)
         mcp_server.AddTool("self.robot.set_param",            "四足机器人参数配置(存NVS断电不丢)。id: 参数编号; value: 数值。"
-            "id表: 0=gait(0波浪/1对角) 1=direction(0前进..6停止) 2=speed(0-100) "
-            "3=hip_amp步幅(度) 4=knee_amp抬腿高度(度) 5=phase_step步频TROT 6=phase_step_wave步频WAVE "
+            "id表: 0=gait(0WALK/1WAVE/2TROT) 1=direction(0前进..6停止) 2=speed(0-100) "
+            "3=hip_amp步幅(度) 4=knee_amp抬腿高度(度) 5=phase_step步频TROT 6=phase_step_wave步频WAVE/WALK "
             "7=smooth_step每tick最大角度变化(防暴冲) 8=accel_limit加速度限幅 9=angle_limit角度限幅 "
-            "10-13=髋舵机反转(0/1) 14-17=膝舵机反转(0/1) 18-21=髋中立微调(度) 22-25=膝中立微调(度)",
+            "10=l1大腿长(mm) 11=l2小腿长(mm) 12=body_height机身高度(mm) 13=step_len步幅(mm) 14=lift_height抬腿高度(mm) 15=duty占空比(0.5-0.9) "
+            "16-19=髋舵机反转(0/1) 20-23=膝舵机反转(0/1) 24-27=髋中立微调(度) 28-31=膝中立微调(度)",
             PropertyList({
-                Property("id", kPropertyTypeInteger, 3, 0, 25),
+                Property("id", kPropertyTypeInteger, 3, 0, 31),
                 Property("value", kPropertyTypeInteger, 45, -90, 180)
             }),
             [this](const PropertyList& properties) -> ReturnValue {
