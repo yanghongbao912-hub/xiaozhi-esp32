@@ -47,8 +47,8 @@ esp_err_t Pca9685::Init() {
     d = 0x04;
     ret = WriteRegs(PCA9685_MODE2, &d, 1);
     if (ret != ESP_OK) return ret;
-    // MODE1: 唤醒 + 寄存器自动递增
-    d = 0x20;  // SLEEP=0, AI=1
+    // MODE1: 唤醒 + 寄存器自动递增 + RESTART (重启内部 PWM 时钟)
+    d = 0xA0;  // SLEEP=0, AI=1, RESTART=1
     ret = WriteRegs(PCA9685_MODE1, &d, 1);
     if (ret != ESP_OK) return ret;
     vTaskDelay(pdMS_TO_TICKS(5));

@@ -2,6 +2,9 @@
 
 #include "pca9685.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 /**
  * @brief 四足运动控制器 (8 舵机: 每条腿 髋+膝)
  *
@@ -101,6 +104,9 @@ public:
 
 private:
     Pca9685* pca_ = nullptr;
+    SemaphoreHandle_t mutex_ = nullptr;   // 递归互斥: 保护共享状态(Tick任务 vs MCP/Demo回调)
+    void Lock() { if (mutex_) xSemaphoreTakeRecursive(mutex_, portMAX_DELAY); }
+    void Unlock() { if (mutex_) xSemaphoreGiveRecursive(mutex_); }
 
     QuadLegCh legs_[4] = {
         {0, 1},   // 左前 髋0 膝1
