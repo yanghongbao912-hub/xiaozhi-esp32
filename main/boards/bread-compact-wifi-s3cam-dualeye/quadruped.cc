@@ -185,9 +185,11 @@ void QuadrupedController::SetPose(QuadPose p) {
     };
     int idx = (int)p;
     if (idx < 0 || idx > 8) idx = 0;
+    // 角度限幅: 防姿势目标超出机械行程导致舵机堵转大电流 (TickGait已有, TickPose必须一致)
+    float lim = params_.angle_limit;
     for (int leg = 0; leg < 4; leg++) {
-        float th = poses[idx][leg * 2];
-        float tk = poses[idx][leg * 2 + 1];
+        float th = ClampF(poses[idx][leg * 2], -lim, lim);
+        float tk = ClampF(poses[idx][leg * 2 + 1], -lim, lim);
         if (th != pose_hip_[leg]) {
             pose_hip_[leg] = th;
             StartTween(hip_tw_[leg], hip_cur_[leg], th);
@@ -197,7 +199,7 @@ void QuadrupedController::SetPose(QuadPose p) {
             StartTween(knee_tw_[leg], knee_cur_[leg], tk);
         }
     }
-    ESP_LOGI(TAG, "Set pose %d", idx);
+    ESP_LOGI(TAG, "Set pose %d (angle_limit=%.0f)", idx, lim);
 }
 
 void QuadrupedController::LoadNeutralFromNvs() {
