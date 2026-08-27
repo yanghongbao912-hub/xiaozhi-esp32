@@ -17,6 +17,27 @@ static float ClampF(float v, float lo, float hi) {
     return (v < lo) ? lo : (v > hi) ? hi : v;
 }
 
+// 参数边界校验: 防止 l1/l2=0 除零、duty=1 除零、超程等
+static float ClampParamId(int id, float v) {
+    switch (id) {
+    case 2:  v = ClampF(v, 0.0f, 1.0f); break;                    // speed
+    case 3:  case 4: v = ClampF(v, 0.0f, 90.0f); break;           // hip_amp/knee_amp
+    case 5:  case 6: v = ClampF(v, 0.001f, 0.2f); break;          // phase_step
+    case 7:  v = ClampF(v, 0.5f, 20.0f); break;                   // smooth_step
+    case 8:  v = ClampF(v, 0.1f, 10.0f); break;                   // accel_limit
+    case 9:  v = ClampF(v, 10.0f, 90.0f); break;                  // angle_limit
+    case 10: case 11: v = ClampF(v, 20.0f, 200.0f); break;        // l1/l2 (防0除零)
+    case 12: v = ClampF(v, 20.0f, 300.0f); break;                 // body_height
+    case 13: v = ClampF(v, 0.0f, 100.0f); break;                  // step_len
+    case 14: v = ClampF(v, 0.0f, 50.0f); break;                   // lift_height
+    case 15: v = ClampF(v, 0.5f, 0.9f); break;                    // duty (防1除零)
+    case 24: case 25: case 26: case 27:
+    case 28: case 29: case 30: case 31: v = ClampF(v, -30.0f, 30.0f); break; // trim
+    default: break;
+    }
+    return v;
+}
+
 QuadrupedController::QuadrupedController(Pca9685* pca) : pca_(pca) {}
 
 // ---------------- 参数表 ----------------
@@ -41,6 +62,7 @@ float QuadrupedController::GetParam(int id) const {
 
 bool QuadrupedController::SetParam(int id, float v) {
     if (id < 0 || id >= ParamCount()) return false;
+    v = ClampParamId(id, v);
     float* p = (float*)&params_.gait;
     p[id] = v;
     switch (id) {
@@ -130,13 +152,15 @@ void QuadrupedController::SyncFromParams() {
 
 void QuadrupedController::SetGait(QuadGait g) {
     gait_ = g;
-    params_.gait = (float)(int)g;
+    pose_mode_ = false;   // 换步态 = 开始运动, 打断姿势
+    // 注: 不改 params_ (运行状态与持久配置分离, 步态偏好用 SetParam(0) 持久化)
 }
 
 void QuadrupedController::SetDirection(QuadDir d) {
     if (d == dir_ && d != QuadDir::kStop) return;  // 同方向忽略, 防重复触发
+    if (d != QuadDir::kStop) pose_mode_ = false;   // 运动命令打断姿势
     dir_ = d;
-    params_.direction = (float)(int)d;
+    // 注: 不改 params_ (方向是临时状态, 重启强制回 stop)
     if (d == QuadDir::kStop) {
         // 减速停止
         amp_target_ = 0.0f;
@@ -154,7 +178,7 @@ void QuadrupedController::SetDirection(QuadDir d) {
 
 void QuadrupedController::SetSpeed(float s) {
     speed_ = ClampF(s, 0.0f, 1.0f);
-    params_.speed = speed_;
+    // 注: 不改 params_ (速度是临时状态)
 }
 
 void QuadrupedController::SetServoReverse(int leg, bool hip_rev, bool knee_rev) {
@@ -176,6 +200,7 @@ void QuadrupedController::StartTween(Tween& tw, float start, float target) {
 void QuadrupedController::SetPose(QuadPose p) {
     pose_ = p;
     pose_mode_ = true;
+    SetDirection(QuadDir::kStop);   // 姿势前停止步态, 姿势结束后不会继续走
     // 9 种姿势: 8 个舵机相对中立的角度(度)
     // 腿: 0左前 1右前 2左后 3右后
     static const float poses[9][8] = {
@@ -212,9 +237,8 @@ void QuadrupedController::SetPose(QuadPose p) {
 void QuadrupedController::Init() {
     LoadParamsFromNvs();
     SyncFromParams();
-    // 安全: 上电总是站立待命, 不恢复上次运动方向 (防上电乱走); 校准走 trim, 不再读 neutral blob
+    // 安全: 上电总是站立待命, 不恢复上次运动方向 (防上电乱走); 校准走 trim
     dir_ = QuadDir::kStop;
-    params_.direction = (float)(int)QuadDir::kStop;
     amp_ = 0.0f;
     amp_target_ = 0.0f;
     ramp_state_ = 0;
