@@ -32,6 +32,7 @@ private:
     i2c_master_bus_handle_t servo_i2c_bus_ = nullptr;
     Pca9685* pca9685_ = nullptr;
     QuadrupedController* quadruped_ = nullptr;
+    volatile bool demo_running_ = false;   // 防演示重入
 
     void InitializeServo() {
         i2c_master_bus_config_t bus_config = {
@@ -81,14 +82,20 @@ private:
 
     static void QuadrupedDemoTask(void* arg) {
         auto* board = static_cast<CompactWifiBoardS3CamDualEye*>(arg);
-        vTaskDelay(pdMS_TO_TICKS(1500));
-        if (board->quadruped_ == nullptr) {
-            ESP_LOGE(TAG, "Quadruped not ready, demo skipped");
+        if (board->demo_running_) {
+            ESP_LOGW(TAG, "Demo already running, skip");
             vTaskDelete(nullptr);
             return;
         }
-        // 启动 Tick 任务 (20ms 周期)
-        xTaskCreate(QuadrupedTickTask, "quad_tick", 4096, board, 1, nullptr);
+        board->demo_running_ = true;
+        vTaskDelay(pdMS_TO_TICKS(500));
+        if (board->quadruped_ == nullptr) {
+            ESP_LOGE(TAG, "Quadruped not ready, demo skipped");
+            board->demo_running_ = false;
+            vTaskDelete(nullptr);
+            return;
+        }
+        // 注: QuadrupedTickTask 已由构造函数常驻启动, 这里不再创建
         board->quadruped_->SetSpeed(0.6f);
 
         // 姿势演示
@@ -121,6 +128,7 @@ private:
         board->quadruped_->SetDirection(QuadDir::kStop);
         board->quadruped_->SetPose(QuadPose::kNeutral);
         ESP_LOGW(TAG, "Quadruped demo done, idle");
+        board->demo_running_ = false;
         vTaskDelete(nullptr);
     }
 
@@ -165,8 +173,7 @@ private:
             });
 
         // 3) 参数配置 (网页/AI 调步幅/抬腿/步频/限幅/舵机反转等, 存 NVS 断电不丢)
-        mcp_server.AddTool("self.robot.set_param",
-            "四足机器人参数配置(存NVS断电不丢)。id: 参数编号; value: 数值。"
+        mcp_server.AddTool("self.robot.set_param",            "四足机器人参数配置(存NVS断电不丢)。id: 参数编号; value: 数值。"
             "id表: 0=gait(0波浪/1对角) 1=direction(0前进..6停止) 2=speed(0-100) "
             "3=hip_amp步幅(度) 4=knee_amp抬腿高度(度) 5=phase_step步频TROT 6=phase_step_wave步频WAVE "
             "7=smooth_step每tick最大角度变化(防暴冲) 8=accel_limit加速度限幅 9=angle_limit角度限幅 "
@@ -185,6 +192,17 @@ private:
                     return true;
                 }
                 return false;
+            });
+
+        // 4) 演示 (9 姿势 + 六方向步态, 约45秒; 演示结束后回到立正待命)
+        mcp_server.AddTool("self.robot.demo",
+            "四足机器人开机演示: 依次展示9种预设姿势, 然后TROT对角步态走六个方向, 最后WAVE波浪步态前进, "
+            "约45秒, 结束后自动回立正待命。想看演示时调用, 演示期间语音指令会被覆盖, 结束后恢复。",
+            PropertyList(),
+            [this](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                xTaskCreate(QuadrupedDemoTask, "quad_demo", 4096, this, 1, nullptr);
+                return true;
             });
     }
 
@@ -276,7 +294,8 @@ public:
         InitializeButtons();
         InitializeServo();
         InitializeTools();
-        xTaskCreate(QuadrupedDemoTask, "quad_demo", 4096, this, 1, nullptr);
+        // 常驻 Tick 任务 (20ms 周期驱动舵机); 演示不再自动跑, 由 self.robot.demo 触发
+        xTaskCreate(QuadrupedTickTask, "quad_tick", 4096, this, 1, nullptr);
 #ifdef DUALEYE_TEST_EYE
         // test mode: backlight already driven constantly in InitializeLcdDisplay
 #else
