@@ -8,6 +8,7 @@
 #include "config.h"
 #include "mcp_server.h"
 #include "pca9685.h"
+#include "quadruped.h"
 
 #include <esp_log.h>
 #include <driver/spi_common.h>
@@ -30,6 +31,7 @@ private:
     Display* display_;
     i2c_master_bus_handle_t servo_i2c_bus_ = nullptr;
     Pca9685* pca9685_ = nullptr;
+    QuadrupedController* quadruped_ = nullptr;
 
     void InitializeServo() {
         i2c_master_bus_config_t bus_config = {
@@ -64,32 +66,61 @@ private:
         if (pca9685_->Init() != ESP_OK) {
             ESP_LOGE(TAG, "PCA9685 init failed, check wiring (SDA=%d SCL=%d, V+ 5V?)", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN);
         }
+        quadruped_ = new QuadrupedController(pca9685_);
+        quadruped_->Init();
         ESP_LOGI(TAG, "Servo I2C ready: SDA=%d SCL=%d, PCA9685 addr=0x%02X", (int)SERVO_SDA_PIN, (int)SERVO_SCL_PIN, PCA9685_I2C_ADDR);
     }
 
-    static void ServoTestTask(void* arg) {
+    static void QuadrupedTickTask(void* arg) {
+        auto* board = static_cast<CompactWifiBoardS3CamDualEye*>(arg);
+        while (1) {
+            if (board->quadruped_ != nullptr) board->quadruped_->Tick();
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+    }
+
+    static void QuadrupedDemoTask(void* arg) {
         auto* board = static_cast<CompactWifiBoardS3CamDualEye*>(arg);
         vTaskDelay(pdMS_TO_TICKS(1500));
-        if (board->pca9685_ == nullptr) {
-            ESP_LOGE(TAG, "PCA9685 not ready, servo test skipped");
+        if (board->quadruped_ == nullptr) {
+            ESP_LOGE(TAG, "Quadruped not ready, demo skipped");
             vTaskDelete(nullptr);
             return;
         }
-        ESP_LOGW(TAG, "Servo test: sweep channels 0..7 (0->180->0)");
-        // 依次测 8 个通道: 0°->180°->0°
-        for (int ch = 0; ch < 8; ch++) {
-            board->pca9685_->SetServoAngle(ch, 0);
-            vTaskDelay(pdMS_TO_TICKS(300));
-            board->pca9685_->SetServoAngle(ch, 180);
-            vTaskDelay(pdMS_TO_TICKS(500));
-            board->pca9685_->SetServoAngle(ch, 90);
-            vTaskDelay(pdMS_TO_TICKS(500));
-        }
-        // 全部转到中立位 90°, 方便安装四足支架
-        ESP_LOGW(TAG, "Servo test done. All 8 channels set to 90 degree (neutral) for assembly");
-        for (int ch = 0; ch < 8; ch++) {
-            board->pca9685_->SetServoAngle(ch, 90);
-        }
+        // 启动 Tick 任务 (20ms 周期)
+        xTaskCreate(QuadrupedTickTask, "quad_tick", 4096, board, 1, nullptr);
+        board->quadruped_->SetSpeed(0.6f);
+
+        // 姿势演示
+        ESP_LOGW(TAG, "=== Quadruped demo: 9 poses ===");
+        board->quadruped_->SetPose(QuadPose::kNeutral);   vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kLieDown);   vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kPuppy);     vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kSit);       vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kRelax);     vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kBattle);    vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kHandshakeL); vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kHandshakeR); vTaskDelay(pdMS_TO_TICKS(1800));
+        board->quadruped_->SetPose(QuadPose::kWiggle);    vTaskDelay(pdMS_TO_TICKS(2500));
+        board->quadruped_->SetPose(QuadPose::kNeutral);   vTaskDelay(pdMS_TO_TICKS(1500));
+
+        // 步态演示 (TROT + WAVE)
+        ESP_LOGW(TAG, "=== Quadruped demo: gait TROT forward ===");
+        board->quadruped_->SetGait(QuadGait::kTrot);
+        board->quadruped_->SetDirection(QuadDir::kForward);  vTaskDelay(pdMS_TO_TICKS(3000));
+        board->quadruped_->SetDirection(QuadDir::kBackward); vTaskDelay(pdMS_TO_TICKS(3000));
+        board->quadruped_->SetDirection(QuadDir::kTurnLeft); vTaskDelay(pdMS_TO_TICKS(2500));
+        board->quadruped_->SetDirection(QuadDir::kTurnRight); vTaskDelay(pdMS_TO_TICKS(2500));
+        board->quadruped_->SetDirection(QuadDir::kShiftLeft); vTaskDelay(pdMS_TO_TICKS(2500));
+        board->quadruped_->SetDirection(QuadDir::kShiftRight); vTaskDelay(pdMS_TO_TICKS(2500));
+        ESP_LOGW(TAG, "=== Quadruped demo: gait WAVE forward ===");
+        board->quadruped_->SetGait(QuadGait::kWave);
+        board->quadruped_->SetDirection(QuadDir::kForward);  vTaskDelay(pdMS_TO_TICKS(3000));
+
+        // 结束: 回到立正
+        board->quadruped_->SetDirection(QuadDir::kStop);
+        board->quadruped_->SetPose(QuadPose::kNeutral);
+        ESP_LOGW(TAG, "Quadruped demo done, idle");
         vTaskDelete(nullptr);
     }
 
@@ -180,7 +211,7 @@ public:
         InitializeLcdDisplay();
         InitializeButtons();
         InitializeServo();
-        xTaskCreate(ServoTestTask, "servo_test", 4096, this, 1, nullptr);
+        xTaskCreate(QuadrupedDemoTask, "quad_demo", 4096, this, 1, nullptr);
 #ifdef DUALEYE_TEST_EYE
         // test mode: backlight already driven constantly in InitializeLcdDisplay
 #else
