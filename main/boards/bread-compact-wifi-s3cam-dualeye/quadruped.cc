@@ -229,6 +229,11 @@ void QuadrupedController::Init() {
     LoadParamsFromNvs();
     SyncFromParams();
     LoadNeutralFromNvs();
+    // 初始停止时幅度为0, 站立不动 (WALK/TROT/WAVE 通用)
+    if (dir_ == QuadDir::kStop) {
+        amp_ = 0.0f;
+        amp_target_ = 0.0f;
+    }
     ESP_LOGI(TAG, "Quadruped ready, gait=%s dir=%d speed=%.2f, 8 servos",
              gait_ == QuadGait::kWalk ? "WALK" : gait_ == QuadGait::kWave ? "WAVE" : "TROT",
              (int)dir_, speed_);
@@ -498,7 +503,8 @@ void QuadrupedController::TickWalk() {
         else if (dir_ == QuadDir::kTurnLeft) x = (leg == 0 || leg == 2) ? fx : -fx;
         else if (dir_ == QuadDir::kTurnRight) x = (leg == 0 || leg == 2) ? -fx : fx;
         else if (dir_ == QuadDir::kShiftLeft || dir_ == QuadDir::kShiftRight) x = 0;
-        // kForward / kStop: 用 fx, kStop 时 amp_ 渐变归零, 足端自然回中立
+        else if (dir_ == QuadDir::kStop) { x = 0; fz = z0; }   // 停止: 足端回中立站立
+        // kForward: 用 fx
 
         float hip_deg, knee_deg;
         SolveIK(x, fz, hip_deg, knee_deg);
