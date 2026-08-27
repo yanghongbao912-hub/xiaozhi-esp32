@@ -9,7 +9,6 @@
 #define TAG "Quadruped"
 
 #define NVS_NS "quadruped"
-#define KEY_NEUTRAL "neutral"   // 中立校准: 8 个 float
 #define KEY_PARAMS  "params"    // 参数表: QuadParams blob
 
 static_assert(sizeof(QuadParams) == 32 * 4, "QuadParams must be 32 contiguous floats");
@@ -142,12 +141,15 @@ void QuadrupedController::SetDirection(QuadDir d) {
         // 减速停止
         amp_target_ = 0.0f;
         ramp_state_ = 0;
-    } else if (ramp_state_ == 0) {
-        // 零突变: 两段执行 —— 先幅度归零(停), 再反向启动
+    } else if (amp_ > 0.001f) {
+        // 零突变: 无论之前什么状态(含连续快切), 都先归零再反向
         ramp_state_ = 1;
         amp_target_ = 0.0f;
+    } else {
+        // 已经在停止位, 直接启动新方向
+        ramp_state_ = 2;
+        amp_target_ = 1.0f;
     }
-    // ramp 进行中再次换方向: 保持当前 ramp, 目标方向已更新
 }
 
 void QuadrupedController::SetSpeed(float s) {
@@ -207,54 +209,35 @@ void QuadrupedController::SetPose(QuadPose p) {
     ESP_LOGI(TAG, "Set pose %d (angle_limit=%.0f)", idx, lim);
 }
 
-void QuadrupedController::LoadNeutralFromNvs() {
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return;
-    float neutral[8] = {0};
-    size_t len = sizeof(neutral);
-    if (nvs_get_blob(h, KEY_NEUTRAL, neutral, &len) == ESP_OK && len == sizeof(neutral)) {
-        // 应用到 hip_cur_/knee_cur_ 作为起点
-        for (int leg = 0; leg < 4; leg++) {
-            hip_cur_[leg] = neutral[leg * 2];
-            knee_cur_[leg] = neutral[leg * 2 + 1];
-            pose_hip_[leg] = hip_cur_[leg];
-            pose_knee_[leg] = knee_cur_[leg];
-        }
-        ESP_LOGI(TAG, "Neutral loaded from NVS");
-    }
-    nvs_close(h);
-}
-
 void QuadrupedController::Init() {
     LoadParamsFromNvs();
     SyncFromParams();
-    LoadNeutralFromNvs();
-    // 初始停止时幅度为0, 站立不动 (WALK/TROT/WAVE 通用)
-    if (dir_ == QuadDir::kStop) {
-        amp_ = 0.0f;
-        amp_target_ = 0.0f;
-    }
-    ESP_LOGI(TAG, "Quadruped ready, gait=%s dir=%d speed=%.2f, 8 servos",
+    // 安全: 上电总是站立待命, 不恢复上次运动方向 (防上电乱走); 校准走 trim, 不再读 neutral blob
+    dir_ = QuadDir::kStop;
+    params_.direction = (float)(int)QuadDir::kStop;
+    amp_ = 0.0f;
+    amp_target_ = 0.0f;
+    ramp_state_ = 0;
+    ESP_LOGI(TAG, "Quadruped ready, gait=%s dir=STOP speed=%.2f, 8 servos",
              gait_ == QuadGait::kWalk ? "WALK" : gait_ == QuadGait::kWave ? "WAVE" : "TROT",
-             (int)dir_, speed_);
+             speed_);
 }
 
 void QuadrupedController::CalibrateNeutral() {
-    // 把当前舵机角度记为中立 (相对 90 的偏移)
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) {
-        ESP_LOGE(TAG, "NVS open failed");
-        return;
-    }
-    float neutral[8];
+    // 把当前角度记为中立: 写入 trim(微调偏移), 然后当前角归零.
+    // trim 是所有目标角度的基准偏移, 校准后全部动作自动跟随, 存 NVS 断电不丢.
     for (int leg = 0; leg < 4; leg++) {
-        neutral[leg * 2] = hip_cur_[leg];
-        neutral[leg * 2 + 1] = knee_cur_[leg];
+        hip_trim_[leg] = (int)roundf(hip_cur_[leg]);
+        knee_trim_[leg] = (int)roundf(knee_cur_[leg]);
+        params_.hip_trim[leg] = (float)hip_trim_[leg];
+        params_.knee_trim[leg] = (float)knee_trim_[leg];
+        hip_cur_[leg] = 0.0f;
+        knee_cur_[leg] = 0.0f;
+        prev_delta_[leg][0] = 0.0f;
+        prev_delta_[leg][1] = 0.0f;
     }
-    nvs_set_blob(h, KEY_NEUTRAL, neutral, sizeof(neutral));
-    nvs_commit(h);
-    nvs_close(h);
-    ESP_LOGI(TAG, "Neutral calibrated & saved");
+    SaveParams();
+    ESP_LOGI(TAG, "Neutral calibrated into trim & saved");
 }
 
 // ---------------- 运动学 ----------------

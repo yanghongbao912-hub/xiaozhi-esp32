@@ -142,7 +142,6 @@ private:
     float amp_ = 1.0f, amp_target_ = 1.0f;  // 幅度系数 0~1
 
     void LoadParamsFromNvs();
-    void LoadNeutralFromNvs();
     void SyncFromParams();
     void ApplyLeg(int leg, float hip_deg, float knee_deg);
     float SignedAngle(int leg, bool is_knee, float deg);

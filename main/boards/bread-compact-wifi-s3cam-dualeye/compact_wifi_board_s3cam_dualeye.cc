@@ -138,7 +138,7 @@ private:
         // 1) 运动控制: 步态 + 方向 + 速度
         mcp_server.AddTool("self.robot.gait",
             "四足机器人运动控制。gait: 步态, 0=WALK对角步行(逆运动学+摆线轨迹,最稳推荐) 1=WAVE波浪(每次抬一腿) 2=TROT对角(两腿同步,快但需大扭矩); "
-            "direction: 方向, 0=前进 1=后退 2=左转 3=右转 4=左平移 5=右平移 6=停止; "
+            "direction: 方向, 0=前进 1=后退 2=左转 3=右转 6=停止 (注: 本机2自由度腿无横向移动, 4/5横移退化为原地踏步); "
             "speed: 速度 0-100, 平滑加速。方向切换自动先减速归零再反向, 不会抽筋。",
             PropertyList({
                 Property("gait", kPropertyTypeInteger, 0, 0, 2),
@@ -193,7 +193,18 @@ private:
                 return false;
             });
 
-        // 4) 演示 (9 姿势 + 六方向步态, 约45秒; 演示结束后回到立正待命)
+        // 4) 中立校准: 把当前姿态记为中立 (存 NVS, 断电不丢, 全部动作自动跟随)
+        mcp_server.AddTool("self.robot.calibrate",
+            "四足机器人中立位校准。先手动摆正机器人姿态(腿垂直朝下、膝伸直)并锁好舵机臂, 再调用此工具, "
+            "当前角度会存为中立微调(存NVS断电不丢), 之后所有姿势和步态自动以该校准为基准。",
+            PropertyList(),
+            [this](const PropertyList& properties) -> ReturnValue {
+                (void)properties;
+                quadruped_->CalibrateNeutral();
+                return true;
+            });
+
+        // 5) 演示 (9 姿势 + 六方向步态, 约45秒; 演示结束后回到立正待命)
         mcp_server.AddTool("self.robot.demo",
             "四足机器人开机演示: 依次展示9种预设姿势, 然后TROT对角步态走六个方向, 最后WAVE波浪步态前进, "
             "约45秒, 结束后自动回立正待命。想看演示时调用, 演示期间语音指令会被覆盖, 结束后恢复。",
