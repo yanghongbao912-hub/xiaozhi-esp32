@@ -124,6 +124,70 @@ private:
         vTaskDelete(nullptr);
     }
 
+    // MCP 工具: 四足运动控制 (AI/网页可直接调用)
+    void InitializeTools() {
+        auto& mcp_server = McpServer::GetInstance();
+        if (quadruped_ == nullptr) return;
+
+        // 1) 运动控制: 步态 + 方向 + 速度
+        mcp_server.AddTool("self.robot.gait",
+            "四足机器人运动控制。gait: 步态, 0=波浪WAVE(每次抬一腿,最稳) 1=对角TROT(对角两腿,快); "
+            "direction: 方向, 0=前进 1=后退 2=左转 3=右转 4=左平移 5=右平移 6=停止; "
+            "speed: 速度 0-100, 平滑加速。方向切换自动先减速归零再反向, 不会抽筋。",
+            PropertyList({
+                Property("gait", kPropertyTypeInteger, 1, 0, 1),
+                Property("direction", kPropertyTypeInteger, 6, 0, 6),
+                Property("speed", kPropertyTypeInteger, 60, 0, 100)
+            }),
+            [this](const PropertyList& properties) -> ReturnValue {
+                int gait = properties["gait"].value<int>();
+                int direction = properties["direction"].value<int>();
+                int speed = properties["speed"].value<int>();
+                quadruped_->SetPose(QuadPose::kNeutral);   // 退出姿势模式, 回到步态
+                quadruped_->SetGait(gait == 0 ? QuadGait::kWave : QuadGait::kTrot);
+                quadruped_->SetSpeed(speed / 100.0f);
+                quadruped_->SetDirection((QuadDir)direction);
+                return true;
+            });
+
+        // 2) 预设姿势 (9 种, 平滑过渡, 可随时打断)
+        mcp_server.AddTool("self.robot.pose",
+            "四足机器人预设姿势(一键触发, 平滑过渡, 可随时打断)。pose: 0=立正(停止并回中立, 说停就停) "
+            "1=趴下 2=小狗趴 3=蹲下/坐下 4=稍息 5=战斗姿态 6=握手(抬左前腿) 7=握手(抬右前腿) 8=扭屁股(持续动画)",
+            PropertyList({
+                Property("pose", kPropertyTypeInteger, 0, 0, 8)
+            }),
+            [this](const PropertyList& properties) -> ReturnValue {
+                int pose = properties["pose"].value<int>();
+                if (pose == 0) quadruped_->SetDirection(QuadDir::kStop);
+                quadruped_->SetPose((QuadPose)pose);
+                return true;
+            });
+
+        // 3) 参数配置 (网页/AI 调步幅/抬腿/步频/限幅/舵机反转等, 存 NVS 断电不丢)
+        mcp_server.AddTool("self.robot.set_param",
+            "四足机器人参数配置(存NVS断电不丢)。id: 参数编号; value: 数值。"
+            "id表: 0=gait(0波浪/1对角) 1=direction(0前进..6停止) 2=speed(0-100) "
+            "3=hip_amp步幅(度) 4=knee_amp抬腿高度(度) 5=phase_step步频TROT 6=phase_step_wave步频WAVE "
+            "7=smooth_step每tick最大角度变化(防暴冲) 8=accel_limit加速度限幅 9=angle_limit角度限幅 "
+            "10-13=髋舵机反转(0/1) 14-17=膝舵机反转(0/1) 18-21=髋中立微调(度) 22-25=膝中立微调(度)",
+            PropertyList({
+                Property("id", kPropertyTypeInteger, 3, 0, 25),
+                Property("value", kPropertyTypeInteger, 45, -90, 180)
+            }),
+            [this](const PropertyList& properties) -> ReturnValue {
+                int id = properties["id"].value<int>();
+                int value = properties["value"].value<int>();
+                float v = (float)value;
+                if (id == 2) v = value / 100.0f;   // speed: 0-100 -> 0-1
+                if (quadruped_->SetParam(id, v)) {
+                    ESP_LOGI(TAG, "quad param[%d]=%d", id, value);
+                    return true;
+                }
+                return false;
+            });
+    }
+
     void InitializeSpi() {
         spi_bus_config_t buscfg = {};
         buscfg.mosi_io_num = DISPLAY_MOSI_PIN;
@@ -211,6 +275,7 @@ public:
         InitializeLcdDisplay();
         InitializeButtons();
         InitializeServo();
+        InitializeTools();
         xTaskCreate(QuadrupedDemoTask, "quad_demo", 4096, this, 1, nullptr);
 #ifdef DUALEYE_TEST_EYE
         // test mode: backlight already driven constantly in InitializeLcdDisplay
