@@ -154,6 +154,7 @@ void QuadrupedController::SyncFromParams() {
 
 void QuadrupedController::SetGait(QuadGait g) {
     Lock();
+    manual_mode_ = false;      // 运动命令退出手动标定
     gait_ = g;
     pose_mode_ = false;   // 换步态 = 开始运动, 打断姿势
     Unlock();
@@ -162,6 +163,7 @@ void QuadrupedController::SetGait(QuadGait g) {
 
 void QuadrupedController::SetDirection(QuadDir d) {
     Lock();
+    manual_mode_ = false;      // 运动命令退出手动标定
     if (d == dir_ && d != QuadDir::kStop) { Unlock(); return; }  // 同方向忽略
     if (d != QuadDir::kStop) pose_mode_ = false;   // 运动命令打断姿势
     dir_ = d;
@@ -206,6 +208,7 @@ void QuadrupedController::StartTween(Tween& tw, float start, float target) {
 
 void QuadrupedController::SetPose(QuadPose p) {
     Lock();
+    manual_mode_ = false;      // 姿势命令退出手动标定
     pose_ = p;
     pose_mode_ = true;
     SetDirection(QuadDir::kStop);   // 姿势前停止步态, 姿势结束后不会继续走
@@ -258,6 +261,15 @@ void QuadrupedController::Init() {
              speed_);
 }
 
+void QuadrupedController::SetManualServo(int channel, float angle) {
+    Lock();
+    manual_mode_ = true;
+    if (channel >= 0 && channel < 8) {
+        manual_angle_[channel] = ClampF(angle, 20.0f, 160.0f);
+    }
+    Unlock();
+}
+
 void QuadrupedController::CalibrateNeutral() {
     // 把当前角度记为中立: 写入 trim(微调偏移), 然后当前角归零.
     // trim 是所有目标角度的基准偏移, 校准后全部动作自动跟随, 存 NVS 断电不丢.
@@ -299,6 +311,14 @@ void QuadrupedController::ApplyLeg(int leg, float hip_deg, float knee_deg) {
 
 void QuadrupedController::Tick() {
     Lock();
+    if (manual_mode_) {
+        // 手动标定模式: 直接输出手动角度, 不跑步态
+        Unlock();
+        for (int ch = 0; ch < 8; ch++) {
+            pca_->SetServoAngle(ch, manual_angle_[ch]);
+        }
+        return;
+    }
     TickAmpRamp();
     float tstep = 0.025f + speed_ * 0.05f;   // 缓动速度: 慢速时过渡更柔和
     if (pose_mode_) {

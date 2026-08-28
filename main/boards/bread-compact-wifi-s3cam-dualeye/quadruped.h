@@ -93,6 +93,7 @@ public:
     void SetPose(QuadPose p);          // 平滑过渡, kNeutral 随时打断
     void CalibrateNeutral();           // 把当前角度记为中立(存NVS)
     void SetServoReverse(int leg, bool hip_rev, bool knee_rev);
+    void SetManualServo(int channel, float angle);  // 标定: 进入手动模式, 单舵机转指定角度
 
     // ---- 参数表 (网页/串口/AI) ----
     static int ParamCount() { return 32; }
@@ -131,6 +132,9 @@ private:
     float prev_delta_[4][2] = {{0}};        // 上一tick角度变化(加速度限幅用)
     float phase_ = 0.0f;                    // 步态相位 0~1
     int boot_tick_ = 0;                     // 上电软启动计数
+    // 手动标定模式 (Tick 直接输出手动角度, 供 test_servo 工具用)
+    bool manual_mode_ = false;
+    float manual_angle_[8] = {90, 90, 90, 90, 90, 90, 90, 90};
 
     // 姿势 tween (smoothstep 缓动)
     bool pose_mode_ = false;

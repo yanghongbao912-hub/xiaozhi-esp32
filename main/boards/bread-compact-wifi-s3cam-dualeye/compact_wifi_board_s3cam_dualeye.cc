@@ -205,6 +205,23 @@ private:
                 return true;
             });
 
+        // 4.5) 单舵机测试 (标定用): 手动把某个舵机转到指定角度并保持
+        mcp_server.AddTool("self.robot.test_servo",
+            "单舵机测试(标定用): 把指定舵机转到指定角度并保持, 用于确认每个舵机的方向和行程。"
+            "channel: 0=左前髋 1=左前膝 2=右前髋 3=右前膝 4=左后髋 5=左后膝 6=右后髋 7=右后膝; "
+            "angle: 0-180度(90=中立)。测试完说'立正'或'前进'恢复正常控制。",
+            PropertyList({
+                Property("channel", kPropertyTypeInteger, 0, 0, 7),
+                Property("angle", kPropertyTypeInteger, 90, 0, 180)
+            }),
+            [this](const PropertyList& properties) -> ReturnValue {
+                int ch = properties["channel"].value<int>();
+                int angle = properties["angle"].value<int>();
+                quadruped_->SetManualServo(ch, (float)angle);
+                ESP_LOGI(TAG, "test servo ch%d -> %d deg", ch, angle);
+                return true;
+            });
+
         // 5) 演示 (9 姿势 + WALK/WAVE 步态, 约45秒; 演示结束后回到立正待命)
         mcp_server.AddTool("self.robot.demo",
             "四足机器人演示: 依次展示9种预设姿势, 然后WALK逆运动学步态走前后左右转, 最后WAVE波浪步态前进, "
