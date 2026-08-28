@@ -378,14 +378,8 @@ void QuadrupedController::TickPose(float tstep) {
         }
     }
 
-    // 全部到位后退出姿势模式 (wiggle 除外, 持续动画)
-    if (pose_ != QuadPose::kWiggle) {
-        bool done = true;
-        for (int leg = 0; leg < 4; leg++) {
-            if (hip_tw_[leg].active || knee_tw_[leg].active) { done = false; break; }
-        }
-        if (done) pose_mode_ = false;
-    }
+    // 姿势完成后保持 (不自动退出), 直到运动命令(前进/后退等)或立正/新姿势才改变
+    // wiggle 持续动画, 其余姿势到位后原地保持
 }
 
 // 步态模式: 相位连续 + 限速 + 加速度限幅 + 角度限幅
