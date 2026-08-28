@@ -77,6 +77,9 @@ struct QuadParams {
     float knee_rev[4] = {0, 1, 0, 1};  // 20-23: 膝舵机反转
     float hip_trim[4] = {0, 0, 0, 0};  // 24-27: 髋中立微调(度)
     float knee_trim[4] = {0, 0, 0, 0}; // 28-31: 膝中立微调(度)
+    // id 32..47 每舵机机械行程限位 (标定: 测出每个舵机卡死边界, 防超行程堵转)
+    float servo_min[8] = {20, 20, 20, 20, 20, 20, 20, 20};        // 32-39: 各通道最小安全角度
+    float servo_max[8] = {160, 160, 160, 160, 160, 160, 160, 160}; // 40-47: 各通道最大安全角度
 };
 
 class QuadrupedController {
@@ -96,7 +99,7 @@ public:
     void SetManualServo(int channel, float angle);  // 标定: 进入手动模式, 单舵机转指定角度
 
     // ---- 参数表 (网页/串口/AI) ----
-    static int ParamCount() { return 32; }
+    static int ParamCount() { return 48; }
     static const char* ParamName(int id);
     bool SetParam(int id, float v);    // 同步内部状态并持久化
     float GetParam(int id) const;

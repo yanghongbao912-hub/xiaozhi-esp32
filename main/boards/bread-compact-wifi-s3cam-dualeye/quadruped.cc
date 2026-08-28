@@ -11,7 +11,7 @@
 #define NVS_NS "quadruped"
 #define KEY_PARAMS  "params"    // 参数表: QuadParams blob
 
-static_assert(sizeof(QuadParams) == 32 * 4, "QuadParams must be 32 contiguous floats");
+static_assert(sizeof(QuadParams) == 48 * 4, "QuadParams must be 48 contiguous floats");
 
 static float ClampF(float v, float lo, float hi) {
     return (v < lo) ? lo : (v > hi) ? hi : v;
@@ -33,6 +33,10 @@ static float ClampParamId(int id, float v) {
     case 15: v = ClampF(v, 0.5f, 0.9f); break;                    // duty (防1除零)
     case 24: case 25: case 26: case 27:
     case 28: case 29: case 30: case 31: v = ClampF(v, -30.0f, 30.0f); break; // trim
+    case 32: case 33: case 34: case 35: case 36: case 37: case 38: case 39:
+        v = ClampF(v, 0.0f, 90.0f); break;                              // servo_min
+    case 40: case 41: case 42: case 43: case 44: case 45: case 46: case 47:
+        v = ClampF(v, 90.0f, 180.0f); break;                            // servo_max
     default: break;
     }
     return v;
@@ -43,7 +47,7 @@ QuadrupedController::QuadrupedController(Pca9685* pca) : pca_(pca) {}
 // ---------------- 参数表 ----------------
 
 const char* QuadrupedController::ParamName(int id) {
-    static const char* names[32] = {
+    static const char* names[48] = {
         "gait", "direction", "speed", "hip_amp", "knee_amp",
         "phase_step", "phase_step_wave", "smooth_step", "accel_limit", "angle_limit",
         "l1", "l2", "body_height", "step_len", "lift_height", "duty",
@@ -51,8 +55,12 @@ const char* QuadrupedController::ParamName(int id) {
         "knee_rev_0", "knee_rev_1", "knee_rev_2", "knee_rev_3",
         "hip_trim_0", "hip_trim_1", "hip_trim_2", "hip_trim_3",
         "knee_trim_0", "knee_trim_1", "knee_trim_2", "knee_trim_3",
+        "servo_min_0", "servo_min_1", "servo_min_2", "servo_min_3",
+        "servo_min_4", "servo_min_5", "servo_min_6", "servo_min_7",
+        "servo_max_0", "servo_max_1", "servo_max_2", "servo_max_3",
+        "servo_max_4", "servo_max_5", "servo_max_6", "servo_max_7",
     };
-    return (id >= 0 && id < 32) ? names[id] : "";
+    return (id >= 0 && id < 48) ? names[id] : "";
 }
 
 float QuadrupedController::GetParam(int id) const {
@@ -265,7 +273,7 @@ void QuadrupedController::SetManualServo(int channel, float angle) {
     Lock();
     manual_mode_ = true;
     if (channel >= 0 && channel < 8) {
-        manual_angle_[channel] = ClampF(angle, 20.0f, 160.0f);
+        manual_angle_[channel] = ClampF(angle, params_.servo_min[channel], params_.servo_max[channel]);
     }
     Unlock();
 }
@@ -298,13 +306,14 @@ float QuadrupedController::SignedAngle(int leg, bool is_knee, float deg) {
 }
 
 void QuadrupedController::ApplyLeg(int leg, float hip_deg, float knee_deg) {
-    // trim 可能叠加到 angle_limit 之外, clamp 到 MG90S 安全行程(避免 0/180 极限堵转)
+    // trim 可能叠加到 angle_limit 之外, clamp 到每舵机标定的机械行程(防超行程堵转)
     float h = 90.0f + SignedAngle(leg, false, hip_deg);
     float k = 90.0f + SignedAngle(leg, true, knee_deg);
-    h = ClampF(h, 20.0f, 160.0f);
-    k = ClampF(k, 20.0f, 160.0f);
-    pca_->SetServoAngle(legs_[leg].hip, h);
-    pca_->SetServoAngle(legs_[leg].knee, k);
+    int hch = legs_[leg].hip, kch = legs_[leg].knee;
+    h = ClampF(h, params_.servo_min[hch], params_.servo_max[hch]);
+    k = ClampF(k, params_.servo_min[kch], params_.servo_max[kch]);
+    pca_->SetServoAngle(hch, h);
+    pca_->SetServoAngle(kch, k);
 }
 
 // ---------------- Tick ----------------

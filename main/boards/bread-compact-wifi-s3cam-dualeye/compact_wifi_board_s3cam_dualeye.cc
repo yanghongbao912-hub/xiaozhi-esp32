@@ -177,9 +177,10 @@ private:
             "3=hip_amp步幅(度) 4=knee_amp抬腿高度(度) 5=phase_step步频TROT 6=phase_step_wave步频WAVE/WALK "
             "7=smooth_step每tick最大角度变化(防暴冲) 8=accel_limit加速度限幅 9=angle_limit角度限幅 "
             "10=l1大腿长(mm) 11=l2小腿长(mm) 12=body_height机身高度(mm) 13=step_len步幅(mm) 14=lift_height抬腿高度(mm) 15=duty占空比(0.5-0.9) "
-            "16-19=髋舵机反转(0/1) 20-23=膝舵机反转(0/1) 24-27=髋中立微调(度) 28-31=膝中立微调(度)",
+            "16-19=髋舵机反转(0/1) 20-23=膝舵机反转(0/1) 24-27=髋中立微调(度) 28-31=膝中立微调(度) "
+            "32-39=各舵机最小角度(行程标定) 40-47=各舵机最大角度(行程标定)",
             PropertyList({
-                Property("id", kPropertyTypeInteger, 3, 0, 31),
+                Property("id", kPropertyTypeInteger, 3, 0, 47),
                 Property("value", kPropertyTypeInteger, 45, -90, 180)
             }),
             [this](const PropertyList& properties) -> ReturnValue {
