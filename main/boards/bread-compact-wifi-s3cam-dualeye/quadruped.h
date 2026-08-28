@@ -138,6 +138,7 @@ private:
     // 手动标定模式 (Tick 直接输出手动角度, 供 test_servo 工具用)
     bool manual_mode_ = false;
     float manual_angle_[8] = {90, 90, 90, 90, 90, 90, 90, 90};
+    bool manual_touched_[8] = {false, false, false, false, false, false, false, false};
 
     // 姿势 tween (smoothstep 缓动)
     bool pose_mode_ = false;

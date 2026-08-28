@@ -271,9 +271,13 @@ void QuadrupedController::Init() {
 
 void QuadrupedController::SetManualServo(int channel, float angle) {
     Lock();
+    if (!manual_mode_) {
+        for (int i = 0; i < 8; i++) manual_touched_[i] = false;   // 首次进入手动, 重置
+    }
     manual_mode_ = true;
     if (channel >= 0 && channel < 8) {
         manual_angle_[channel] = ClampF(angle, params_.servo_min[channel], params_.servo_max[channel]);
+        manual_touched_[channel] = true;
     }
     Unlock();
 }
@@ -321,10 +325,12 @@ void QuadrupedController::ApplyLeg(int leg, float hip_deg, float knee_deg) {
 void QuadrupedController::Tick() {
     Lock();
     if (manual_mode_) {
-        // 手动标定模式: 直接输出手动角度, 不跑步态
+        // 手动标定模式: 只输出被手动设置的通道, 其他舵机保持步态最后的角度
         Unlock();
         for (int ch = 0; ch < 8; ch++) {
-            pca_->SetServoAngle(ch, manual_angle_[ch]);
+            if (manual_touched_[ch]) {
+                pca_->SetServoAngle(ch, manual_angle_[ch]);
+            }
         }
         return;
     }
